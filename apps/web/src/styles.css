@@ -29,11 +29,13 @@ textarea {
   display: grid;
   min-height: 100vh;
   padding: 16px;
-  place-items: center;
+  align-items: start;
+  justify-items: center;
 }
 
 .app-panel {
   width: min(100%, 38rem);
+  margin: 0 auto;
   padding: 20px;
   border: 1px solid #d3d3d3;
   border-radius: 16px;
@@ -123,6 +125,19 @@ h1 {
   white-space: nowrap;
 }
 
+.selected-file-list {
+  display: grid;
+  gap: 6px;
+}
+
+.selected-file-item {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.92rem;
+  color: #505050;
+}
+
 .file-input {
   position: absolute;
   width: 1px;
@@ -185,6 +200,7 @@ h1 {
 @media (min-width: 720px) {
   .app-shell {
     padding: 28px;
+    place-items: center;
   }
 
   .app-panel {

@@ -1,28 +1,29 @@
 # Media Tagger Release Instructions
 
-## Current Goal
+## Product Contract
 
 Build a mobile-first web app with one fast workflow:
 
 1. Upload a still image, GIF, or video.
-2. Enter tags.
-3. Write a metadata payload in the exact shape `tags:<csv list of tags>` with optional trailing `;`.
-4. Download the updated file back in the browser.
+2. Select up to 10 files for one tagging pass.
+3. Enter tags.
+4. Write a metadata payload in the exact shape `tags:<csv list of tags>` with optional trailing `;`.
+5. Download each updated file back in the browser.
 
 The app must run in Docker, use devcontainers for development, include Makefile support, and ship with strong unit, integration, and e2e coverage plus GitHub CI workflows.
 
-## Current Status
+## Current State
 
 - Completed: initial devcontainer setup in `.devcontainer/`.
 - Current devcontainer base: `mcr.microsoft.com/devcontainers/javascript-node:24-bookworm`.
 - Installed native tooling: `pnpm` via Corepack during image build, `make`, `exiftool`, `ffmpeg`, and Playwright Linux runtime dependencies.
-- Completed: initial `pnpm` workspace scaffold with frontend and backend package skeletons.
+- Completed: `pnpm` workspace with frontend and backend packages.
 - Completed: root `Makefile` with install, dev, build, lint, typecheck, test, and CI-style targets.
 - Completed: minimal Fastify upload endpoint, metadata write proof of concept, and first single-screen web flow.
 - Completed: initial GitHub Actions CI workflow for lint, typecheck, test, and build validation.
-- Completed: baseline runtime Dockerfile, Docker Compose example, Kubernetes example manifests, and release workflow scaffold.
+- Completed: runtime Dockerfile, Docker Compose example, Kubernetes example manifests, and release workflow.
 - Completed: baseline web unit tests and Playwright coverage for the upload-to-download path.
-- Next implementation step inside the container: add fixture-backed API integration tests and broaden browser coverage for failure cases.
+- Remaining engineering work should focus on deeper automated verification rather than expanding product scope.
 
 ## Recommended Architecture
 
@@ -49,7 +50,7 @@ The app must run in Docker, use devcontainers for development, include Makefile 
 - Read the metadata back after writing during tests to confirm the payload survives round-trip.
 - Keep the mapping logic centralized so supported formats can expand without changing the UI.
 
-## Initial Supported Format Plan
+## Supported Formats
 
 - Still images: JPG, JPEG, WebP, PNG.
 - Animated images: GIF.
@@ -69,11 +70,13 @@ If a format cannot safely store the payload in a writable metadata field, fail c
   - Preserved or normalized filename
   - Correct content type and attachment headers
 
+The web app may call this endpoint once per selected file so the browser can download each updated result individually.
+
 ## UI Shape
 
 - Single mobile-first screen.
 - Controls only for:
-  - File picker
+  - Multi-file picker with an upper limit of 10 files
   - Tags input
   - Optional semicolon toggle
   - Submit action
@@ -111,23 +114,16 @@ If a format cannot safely store the payload in a writable metadata field, fail c
   - Playwright e2e
   - Docker build validation
 
-## Open Questions To Resolve Early
+## Release Workflow
 
-- Final supported extension list for v1.
-- Exact metadata field mapping per container.
-- Default state for the trailing semicolon option.
-- Upload size limits for mobile usage.
-- Whether the service should preserve all original metadata or only append/update targeted fields.
+Use the Makefile release helpers rather than creating release branches and tags by hand.
 
-## Ordered Release Todo
+1. Run `make prepare-release VERSION=vX.Y.Z` from a clean `main` branch.
+2. Open and merge the generated `release/vX.Y.Z` pull request.
+3. Pull the updated `main` branch.
+4. Run `make tag-release VERSION=vX.Y.Z`.
 
-1. Verify the devcontainer boots cleanly and the toolchain is available inside it.
-2. Install workspace dependencies and confirm the scaffold runs end to end.
-3. Add Docker and Docker Compose support aligned with the devcontainer toolchain.
-4. Extend the minimal Fastify upload endpoint with fixture-based metadata verification.
-5. Expand coverage around payload generation, media validation, and metadata readback.
-6. Broaden Playwright e2e coverage for success and failure paths.
-7. Validate release and deployment flows against the runtime image.
+The pushed tag triggers the GitHub release workflow, which verifies the API and web apps, runs Playwright coverage, publishes the container image, and creates the GitHub Release.
 
 ## Guidance For The Next Agent Pass
 

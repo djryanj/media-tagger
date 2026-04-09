@@ -24,24 +24,42 @@ describe("App", () => {
 
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "Tag and download" }));
+    await user.click(
+      screen.getByRole("button", { name: "Tag and download files" }),
+    );
 
-    expect(screen.getByText("Choose a file before submitting.")).toBeVisible();
+    expect(
+      screen.getByText("Choose at least one file before submitting."),
+    ).toBeVisible();
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("submits the selected file and downloads the tagged result", async () => {
+  it("submits each selected file and downloads the tagged results", async () => {
     const user = userEvent.setup();
     const fetchMock = vi.mocked(fetch);
-    const uploadedFile = new File(["png-data"], "sample.png", {
-      type: "image/png",
-    });
+    const uploadedFiles = [
+      new File(["png-data-1"], "sample-1.png", {
+        type: "image/png",
+      }),
+      new File(["png-data-2"], "sample-2.png", {
+        type: "image/png",
+      }),
+    ];
 
-    fetchMock.mockResolvedValue(
-      new Response(new Blob(["tagged-media"]), {
+    fetchMock.mockResolvedValueOnce(
+      new Response(new Blob(["tagged-media-1"]), {
         status: 200,
         headers: {
-          "content-disposition": 'attachment; filename="tagged-sample.png"',
+          "content-disposition": 'attachment; filename="tagged-sample-1.png"',
+          "content-type": "image/png",
+        },
+      }),
+    );
+    fetchMock.mockResolvedValueOnce(
+      new Response(new Blob(["tagged-media-2"]), {
+        status: 200,
+        headers: {
+          "content-disposition": 'attachment; filename="tagged-sample-2.png"',
           "content-type": "image/png",
         },
       }),
@@ -51,7 +69,7 @@ describe("App", () => {
 
     await user.upload(
       screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
-      uploadedFile,
+      uploadedFiles,
     );
     await user.type(
       screen.getByRole("textbox", { name: /tags/i }),
@@ -60,16 +78,47 @@ describe("App", () => {
     await user.click(
       screen.getByRole("checkbox", { name: /terminate with semicolon/i }),
     );
-    await user.click(screen.getByRole("button", { name: "Tag and download" }));
+    await user.click(
+      screen.getByRole("button", { name: "Tag and download files" }),
+    );
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
 
-    const [, requestInit] = fetchMock.mock.calls[0] ?? [];
-    const formData = requestInit?.body;
+    const firstRequest = fetchMock.mock.calls[0]?.[1];
+    const secondRequest = fetchMock.mock.calls[1]?.[1];
+    const firstFormData = firstRequest?.body as FormData;
+    const secondFormData = secondRequest?.body as FormData;
 
-    expect(formData).toBeInstanceOf(FormData);
-    expect((formData as FormData).get("tags")).toBe("forest, timelapse");
-    expect((formData as FormData).get("terminateWithSemicolon")).toBe("true");
-    expect(screen.getByText("Downloaded tagged-sample.png.")).toBeVisible();
+    expect(firstFormData).toBeInstanceOf(FormData);
+    expect(firstFormData.get("tags")).toBe("forest, timelapse");
+    expect(firstFormData.get("terminateWithSemicolon")).toBe("true");
+    expect((firstFormData.get("file") as File).name).toBe("sample-1.png");
+    expect((secondFormData.get("file") as File).name).toBe("sample-2.png");
+    expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledTimes(2);
+    expect(screen.getByText("Downloaded 2 of 2 files.")).toBeVisible();
+  });
+
+  it("rejects selecting more than 10 files", async () => {
+    const user = userEvent.setup();
+    const uploadedFiles = Array.from(
+      { length: 11 },
+      (_, index) =>
+        new File([`png-data-${index}`], `sample-${index + 1}.png`, {
+          type: "image/png",
+        }),
+    );
+
+    render(<App />);
+
+    await user.upload(
+      screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+      uploadedFiles,
+    );
+
+    expect(
+      screen.getByText("Choose no more than 10 files at once."),
+    ).toBeVisible();
+    expect(screen.getByText("No files selected")).toBeVisible();
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

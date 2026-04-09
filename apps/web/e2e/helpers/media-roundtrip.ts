@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { promisify } from "node:util";
 
 import { expect, type Page } from "@playwright/test";
+import type { Download } from "@playwright/test";
 
 const execFileAsync = promisify(execFile);
 const TEST_TAGS = "forest, timelapse";
@@ -27,11 +28,21 @@ export async function runMediaRoundTrip(page: Page, fixture: MediaFixture) {
     await page.goto("/");
     await page.locator("#media-file").setInputFiles(sourcePath);
     await page.locator("#media-tags").fill(TEST_TAGS);
-    await page.locator("#semicolon-toggle").check();
+    await page
+      .getByRole("checkbox", { name: /terminate with semicolon/i })
+      .setChecked(true, { force: true });
+    await page.locator("#semicolon-toggle").blur();
 
-    const downloadPromise = page.waitForEvent("download");
-    await page.getByRole("button", { name: "Tag and download" }).click();
-    const download = await downloadPromise;
+    const submitButton = page.getByRole("button", {
+      name: "Tag and download files",
+    });
+    await expect(submitButton).toBeVisible();
+    await expect(submitButton).toBeEnabled();
+
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      submitButton.click({ force: true }),
+    ]);
 
     await download.saveAs(downloadPath);
 
@@ -45,6 +56,83 @@ export async function runMediaRoundTrip(page: Page, fixture: MediaFixture) {
     await expect(
       page.getByText(`Downloaded ${download.suggestedFilename()}.`),
     ).toBeVisible();
+  } finally {
+    await rm(temporaryDirectory, { force: true, recursive: true });
+  }
+}
+
+export async function runMultiFileRoundTrip(
+  page: Page,
+  fixtures: [MediaFixture, MediaFixture],
+) {
+  const temporaryDirectory = await mkdtemp(join(tmpdir(), "media-tagger-e2e-"));
+  const sourcePaths = fixtures.map((fixture) =>
+    join(temporaryDirectory, fixture.filename),
+  );
+  const downloadPaths = fixtures.map((fixture) =>
+    join(temporaryDirectory, `download-${fixture.filename}`),
+  );
+
+  try {
+    await Promise.all(
+      fixtures.map((fixture, index) =>
+        createFixture(sourcePaths[index] ?? fixture.filename, fixture.ffmpegArgs),
+      ),
+    );
+
+    await page.goto("/");
+    await page.locator("#media-file").setInputFiles(sourcePaths);
+    await page.locator("#media-tags").fill(TEST_TAGS);
+    await page
+      .getByRole("checkbox", { name: /terminate with semicolon/i })
+      .setChecked(true, { force: true });
+    await page.locator("#semicolon-toggle").blur();
+
+    const submitButton = page.getByRole("button", {
+      name: "Tag and download files",
+    });
+    await expect(submitButton).toBeVisible();
+    await expect(submitButton).toBeEnabled();
+
+    const downloads: Download[] = [];
+    const handleDownload = (download: Download) => {
+      downloads.push(download);
+    };
+
+    page.on("download", handleDownload);
+
+    await submitButton.click({ force: true });
+
+    await expect
+      .poll(() => downloads.length, {
+        message: `Expected ${fixtures.length} download events.`,
+      })
+      .toBe(fixtures.length);
+
+    page.off("download", handleDownload);
+
+    await Promise.all(
+      downloads.map(async (download, index) => {
+        const downloadPath = downloadPaths[index];
+        const fixture = fixtures[index];
+
+        if (!downloadPath || !fixture) {
+          return;
+        }
+
+        await download.saveAs(downloadPath);
+
+        const { stdout } = await execFileAsync("exiftool", [
+          "-s3",
+          `-${fixture.readField}`,
+          downloadPath,
+        ]);
+
+        expect(stdout.trim()).toBe(EXPECTED_PAYLOAD);
+      }),
+    );
+
+    await expect(page.getByText("Downloaded 2 of 2 files.")).toBeVisible();
   } finally {
     await rm(temporaryDirectory, { force: true, recursive: true });
   }

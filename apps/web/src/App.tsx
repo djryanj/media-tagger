@@ -1,9 +1,10 @@
 import { ChangeEvent, FormEvent, useState } from "react";
 
 const ACCEPTED_FILE_TYPES = ".jpg,.jpeg,.png,.webp,.gif,.mp4,.mov";
+const MAX_FILES = 10;
 
 export default function App() {
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [tags, setTags] = useState("");
   const [terminateWithSemicolon, setTerminateWithSemicolon] = useState(false);
   const [status, setStatus] = useState<string>("Ready for upload.");
@@ -13,8 +14,8 @@ export default function App() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!selectedFile) {
-      setErrorMessage("Choose a file before submitting.");
+    if (selectedFiles.length === 0) {
+      setErrorMessage("Choose at least one file before submitting.");
       return;
     }
 
@@ -23,52 +24,101 @@ export default function App() {
       return;
     }
 
-    const formData = new FormData();
-    formData.append("file", selectedFile);
-    formData.append("tags", tags);
-    formData.append("terminateWithSemicolon", String(terminateWithSemicolon));
-
     setIsSubmitting(true);
     setErrorMessage(null);
-    setStatus("Writing metadata...");
+
+    const failures: Array<{ file: string; message: string }> = [];
+    const downloadedFilenames: string[] = [];
 
     try {
-      const response = await fetch("/api/media/tag", {
-        method: "POST",
-        body: formData,
-      });
+      for (const [index, file] of selectedFiles.entries()) {
+        setStatus(
+          selectedFiles.length === 1
+            ? `Writing metadata for ${file.name}...`
+            : `Writing metadata for ${index + 1} of ${selectedFiles.length} files...`,
+        );
 
-      if (!response.ok) {
-        const responseError = await readErrorMessage(response);
-        throw new Error(responseError);
+        try {
+          const formData = new FormData();
+          formData.append("file", file);
+          formData.append("tags", tags);
+          formData.append(
+            "terminateWithSemicolon",
+            String(terminateWithSemicolon),
+          );
+
+          const response = await fetch("/api/media/tag", {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!response.ok) {
+            const responseError = await readErrorMessage(response);
+            throw new Error(responseError);
+          }
+
+          const blob = await response.blob();
+          const downloadFilename =
+            getFilenameFromContentDisposition(
+              response.headers.get("content-disposition"),
+            ) ?? file.name;
+
+          triggerDownload(blob, downloadFilename);
+          downloadedFilenames.push(downloadFilename);
+        } catch (error) {
+          failures.push({
+            file: file.name,
+            message:
+              error instanceof Error
+                ? error.message
+                : "Upload failed unexpectedly.",
+          });
+        }
       }
 
-      const blob = await response.blob();
-      const downloadFilename =
-        getFilenameFromContentDisposition(
-          response.headers.get("content-disposition"),
-        ) ?? selectedFile.name;
+      if (failures.length > 0) {
+        setErrorMessage(formatFailureMessage(failures));
+      }
 
-      triggerDownload(blob, downloadFilename);
-      setStatus(`Downloaded ${downloadFilename}.`);
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Upload failed unexpectedly.",
+      if (downloadedFilenames.length === 0) {
+        setStatus("Request failed.");
+        return;
+      }
+
+      setStatus(
+        downloadedFilenames.length === 1 && failures.length === 0
+          ? `Downloaded ${downloadedFilenames[0]}.`
+          : `Downloaded ${downloadedFilenames.length} of ${selectedFiles.length} files.`,
       );
-      setStatus("Request failed.");
     } finally {
       setIsSubmitting(false);
     }
   }
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0] ?? null;
-    setSelectedFile(file);
+    const files = Array.from(event.target.files ?? []);
 
-    if (file) {
-      setStatus(`Selected ${file.name}.`);
-      setErrorMessage(null);
+    if (files.length > MAX_FILES) {
+      event.target.value = "";
+      setSelectedFiles([]);
+      setErrorMessage(`Choose no more than ${MAX_FILES} files at once.`);
+      setStatus("Ready for upload.");
+      return;
     }
+
+    setSelectedFiles(files);
+
+    if (files.length > 0) {
+      setStatus(
+        files.length === 1
+          ? `Selected ${files[0]?.name ?? "file"}.`
+          : `Selected ${files.length} files.`,
+      );
+      setErrorMessage(null);
+      return;
+    }
+
+    setStatus("Ready for upload.");
   }
 
   return (
@@ -77,27 +127,41 @@ export default function App() {
         <header className="panel-header">
           <h1>Media Tagger</h1>
           <p className="lede">
-            Upload a supported file, enter tags, and download the updated media
-            with a canonical metadata payload.
+            Upload up to 10 supported files, enter one set of tags, and download
+            each updated file with a canonical metadata payload.
           </p>
         </header>
 
         <form className="tagger-form" onSubmit={handleSubmit}>
           <label className="field-card" htmlFor="media-file">
-            <span className="field-label">File</span>
+            <span className="field-label">Files</span>
             <span className="field-help">
-              Supported formats: JPG, JPEG, PNG, WebP, GIF, MP4, and MOV.
+              Supported formats: JPG, JPEG, PNG, WebP, GIF, MP4, and MOV. Tag up
+              to 10 files at once, then download each result individually.
             </span>
             <span className="file-picker-row">
-              <span className="file-picker-button">Choose file</span>
+              <span className="file-picker-button">Choose files</span>
               <span className="field-value file-name">
-                {selectedFile ? selectedFile.name : "No file selected"}
+                {formatSelectedFileSummary(selectedFiles)}
               </span>
             </span>
+            {selectedFiles.length > 0 ? (
+              <span className="selected-file-list" aria-live="polite">
+                {selectedFiles.map((file) => (
+                  <span
+                    className="selected-file-item"
+                    key={`${file.name}-${file.size}`}
+                  >
+                    {file.name}
+                  </span>
+                ))}
+              </span>
+            ) : null}
             <input
               id="media-file"
               accept={ACCEPTED_FILE_TYPES}
               className="file-input"
+              multiple
               onChange={handleFileChange}
               type="file"
             />
@@ -144,7 +208,7 @@ export default function App() {
             disabled={isSubmitting}
             type="submit"
           >
-            {isSubmitting ? "Writing metadata..." : "Tag and download"}
+            {isSubmitting ? "Writing metadata..." : "Tag and download files"}
           </button>
         </form>
 
@@ -188,7 +252,36 @@ function triggerDownload(blob: Blob, filename: string) {
 
   anchor.href = objectUrl;
   anchor.download = filename;
+  anchor.style.display = "none";
+
+  document.body.append(anchor);
   anchor.click();
+  anchor.remove();
 
   URL.revokeObjectURL(objectUrl);
+}
+
+function formatSelectedFileSummary(files: File[]): string {
+  if (files.length === 0) {
+    return "No files selected";
+  }
+
+  if (files.length === 1) {
+    return files[0]?.name ?? "1 file selected";
+  }
+
+  return `${files.length} files selected`;
+}
+
+function formatFailureMessage(
+  failures: Array<{ file: string; message: string }>,
+): string {
+  if (failures.length === 1) {
+    const failure = failures[0];
+    return `${failure?.file}: ${failure?.message}`;
+  }
+
+  return `Failed files: ${failures
+    .map((failure) => `${failure.file} (${failure.message})`)
+    .join("; ")}`;
 }

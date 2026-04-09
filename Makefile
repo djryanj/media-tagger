@@ -5,10 +5,14 @@ DEFAULT_GOAL := help
 API_FILTER := @media-tagger/api
 WEB_FILTER := @media-tagger/web
 PLAYWRIGHT_BROWSER ?= chromium
+VERSION ?=
+VERSION_TAG := $(if $(filter v%,$(VERSION)),$(VERSION),v$(VERSION))
+VERSION_NUM := $(patsubst v%,%,$(VERSION_TAG))
+RELEASE_PACKAGE_FILES := package.json apps/api/package.json apps/web/package.json
 
 .DEFAULT_GOAL := $(DEFAULT_GOAL)
 
-.PHONY: help doctor doctor-tools install install-playwright setup reset-deps dev dev-api dev-web build build-api build-web docker-build lint lint-api lint-web typecheck typecheck-api typecheck-web test test-api test-web test-e2e-web show-report-e2e-web preview-web start-api ci ci-api ci-web clean
+.PHONY: help doctor doctor-tools install install-playwright setup reset-deps dev dev-api dev-web build build-api build-web docker-build lint lint-api lint-web typecheck typecheck-api typecheck-web test test-api test-web test-e2e-web show-report-e2e-web preview-web start-api ci ci-api ci-web _check-version prepare-release tag-release clean
 
 help:
 	@printf "Targets:\n"
@@ -39,6 +43,8 @@ help:
 	@printf "  make ci           Run the local CI-style verification set\n"
 	@printf "  make ci-api       Run lint, typecheck, test, and build for the API package\n"
 	@printf "  make ci-web       Run lint, typecheck, test, and build for the web package\n"
+	@printf "  make prepare-release VERSION=vX.Y.Z Create a release branch, bump versions, and stamp the changelog\n"
+	@printf "  make tag-release VERSION=vX.Y.Z     Create and push the annotated release tag from main\n"
 	@printf "  make clean        Remove generated build and test output\n"
 
 doctor-tools:
@@ -139,6 +145,91 @@ ci: lint typecheck test build
 ci-api: lint-api typecheck-api test-api build-api
 
 ci-web: lint-web typecheck-web test-web build-web
+
+_check-version:
+	@[ -n "$(VERSION)" ] || { \
+		echo "Error: VERSION is required. Example: make $(MAKECMDGOALS) VERSION=v0.1.0"; \
+		exit 1; \
+	}
+	@echo "$(VERSION_TAG)" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9][A-Za-z0-9.-]*)?$$' || { \
+		echo "Error: VERSION must be in vX.Y.Z or vX.Y.Z-pre format (for example: v0.1.0 or v0.1.0-rc.1)."; \
+		exit 1; \
+	}
+
+prepare-release: _check-version
+	@echo "--- Checking working tree is clean --------------------------------"
+	@git diff --quiet && git diff --cached --quiet || { \
+		echo "Error: Working tree has uncommitted changes. Commit or stash them first."; \
+		exit 1; \
+	}
+	@echo "--- Ensuring current branch is main -------------------------------"
+	@[ "$$(git rev-parse --abbrev-ref HEAD)" = "main" ] || { \
+		echo "Error: prepare-release must be run from the main branch."; \
+		exit 1; \
+	}
+	@echo "--- Updating local main -------------------------------------------"
+	@git pull --ff-only origin main
+	@echo "--- Ensuring release branch does not already exist ---------------"
+	@if git show-ref --verify --quiet refs/heads/release/$(VERSION_TAG); then \
+		echo "Error: release/$(VERSION_TAG) already exists locally."; \
+		exit 1; \
+	fi
+	@if git ls-remote --exit-code --heads origin release/$(VERSION_TAG) >/dev/null 2>&1; then \
+		echo "Error: release/$(VERSION_TAG) already exists on origin."; \
+		exit 1; \
+	fi
+	@echo "--- Creating branch release/$(VERSION_TAG) ------------------------"
+	@git checkout -b release/$(VERSION_TAG)
+	@echo "--- Bumping workspace package versions to $(VERSION_NUM) ---------"
+	@VERSION_NUM="$(VERSION_NUM)" node -e 'const fs = require("fs"); const files = process.argv.slice(1); const version = process.env.VERSION_NUM; for (const file of files) { const pkg = JSON.parse(fs.readFileSync(file, "utf8")); pkg.version = version; fs.writeFileSync(file, `${JSON.stringify(pkg, null, 4)}\n`); }' $(RELEASE_PACKAGE_FILES)
+	@echo "--- Stamping CHANGELOG.md -----------------------------------------"
+	@VERSION_NUM="$(VERSION_NUM)" node -e 'const fs = require("fs"); const version = process.env.VERSION_NUM; const today = new Date().toISOString().slice(0, 10); const file = "CHANGELOG.md"; const current = fs.readFileSync(file, "utf8"); const pattern = new RegExp(`^## \\\\[${version.replace(/[.*+?^${}()|[\\]\\]/g, "\\\\$&")}\\\\] - Unreleased$`, "m"); if (!pattern.test(current)) { console.error(`Error: CHANGELOG.md does not contain \"## [${version}] - Unreleased\".`); process.exit(1); } fs.writeFileSync(file, current.replace(pattern, `## [${version}] - ${today}`));'
+	@echo "--- Committing release preparation --------------------------------"
+	@git add $(RELEASE_PACKAGE_FILES) CHANGELOG.md
+	@git commit -m "chore(release): prepare $(VERSION_TAG)"
+	@echo "--- Pushing release branch ----------------------------------------"
+	@git push -u origin release/$(VERSION_TAG)
+	@echo ""
+	@echo "Release branch ready. Next steps:"
+	@echo "  1. Open a PR: release/$(VERSION_TAG) -> main"
+	@echo "  2. Merge the PR"
+	@echo "  3. git checkout main && git pull --ff-only origin main"
+	@echo "  4. make tag-release VERSION=$(VERSION_TAG)"
+
+tag-release: _check-version
+	@echo "--- Ensuring current branch is main -------------------------------"
+	@[ "$$(git rev-parse --abbrev-ref HEAD)" = "main" ] || { \
+		echo "Error: tag-release must be run from the main branch."; \
+		exit 1; \
+	}
+	@echo "--- Checking working tree is clean --------------------------------"
+	@git diff --quiet && git diff --cached --quiet || { \
+		echo "Error: Working tree has uncommitted changes. Commit or stash them first."; \
+		exit 1; \
+	}
+	@echo "--- Updating local main -------------------------------------------"
+	@git pull --ff-only origin main
+	@echo "--- Verifying CHANGELOG has a dated entry for [$(VERSION_NUM)] ----"
+	@grep -Eq '^## \[$(VERSION_NUM)\] - [0-9]{4}-[0-9]{2}-[0-9]{2}$$' CHANGELOG.md || { \
+		echo "Error: CHANGELOG.md has no dated entry for [$(VERSION_NUM)]."; \
+		echo "Did you merge the release branch and pull main?"; \
+		exit 1; \
+	}
+	@echo "--- Ensuring tag does not already exist ---------------------------"
+	@if git rev-parse -q --verify refs/tags/$(VERSION_TAG) >/dev/null; then \
+		echo "Error: tag $(VERSION_TAG) already exists locally."; \
+		exit 1; \
+	fi
+	@if git ls-remote --exit-code --tags origin refs/tags/$(VERSION_TAG) >/dev/null 2>&1; then \
+		echo "Error: tag $(VERSION_TAG) already exists on origin."; \
+		exit 1; \
+	fi
+	@echo "--- Creating annotated tag $(VERSION_TAG) -------------------------"
+	@git tag -a $(VERSION_TAG) -m "Release $(VERSION_TAG)"
+	@echo "--- Pushing tag ---------------------------------------------------"
+	@git push origin $(VERSION_TAG)
+	@echo ""
+	@echo "Tag $(VERSION_TAG) pushed. The GitHub release workflow is now running."
 
 clean:
 	rm -rf apps/api/dist apps/web/dist coverage playwright-report test-results apps/web/playwright-report apps/web/test-results

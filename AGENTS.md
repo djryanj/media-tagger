@@ -1,11 +1,11 @@
 # Agent Notes
 
-This repository is preparing for its first release. Human and AI contributors should optimize for a clean, reliable core workflow rather than broad feature surface.
+Human and AI contributors should optimize for a clean, reliable core workflow rather than broad feature surface.
 
 ## Non-Negotiable Product Contract
 
 - The canonical payload format is `tags:<csv list of tags>` with an optional trailing `;`.
-- The app supports a single workflow: upload, tag, rewrite metadata, download.
+- The app supports a single workflow: upload up to 10 files, tag them once, rewrite metadata, and download each result individually.
 - The first UI should remain a single mobile-first screen.
 
 ## Architecture Direction
@@ -26,10 +26,9 @@ This repository is preparing for its first release. Human and AI contributors sh
 ## Current State
 
 - The devcontainer exists and installs pnpm during image build.
-- The pnpm workspace exists with `apps/web` and `apps/api` package skeletons.
+- The pnpm workspace contains `apps/web` and `apps/api`.
 - A root Makefile exists for install, development, and verification workflows.
-- The first API and web app slice exists for upload, tag normalization, metadata writing, and browser download.
-- A baseline GitHub Actions CI workflow exists for lint, typecheck, test, and build validation.
-- A runtime Dockerfile, Compose example, and Kubernetes example manifests now exist for the single-container deployment path.
-- Web coverage now includes Vitest unit tests and a Playwright flow that verifies upload-to-download round-trip behavior.
-- There is still no fixture-backed API integration suite, and browser coverage is still narrow.
+- The API and web app implement upload, tag normalization, metadata writing, and browser download.
+- GitHub Actions CI validates lint, typecheck, test, build, Playwright coverage, and Docker build flows.
+- The runtime Dockerfile, Compose example, and Kubernetes manifests support the single-container deployment path.
+- The release process is driven by `make prepare-release`, `make tag-release`, and the tag-triggered GitHub release workflow.
