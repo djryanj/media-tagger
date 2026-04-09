@@ -19,6 +19,7 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 - Simplified the canonical metadata payload to `tags:<csv list of tags>` by removing the semicolon toggle from the UI, API contract, tests, and documentation.
 - Hardened media type resolution to prefer detected file bytes over incorrect filename extensions or reported MIME types, while preserving the original media data and renaming downloads when needed.
 - Improved upload and deployment guidance across the UI, README, Compose, Kubernetes, and contributor instructions so RAM, `/tmp`, and upload-cap behavior stay aligned.
+- chore(deps-dev): bump vite from 8.0.7 to 8.0.8 [#8](https://github.com/djryanj/media-tagger/pull/8)
 
 ### Fixed
 
