@@ -1,124 +1,118 @@
 name: Docker Build and Release
 
 on:
-    workflow_call:
-        inputs:
-            push:
-                description: 'Push image to registry'
-                required: false
-                default: false
-                type: boolean
-            platforms:
-                description: 'Target platforms'
-                required: false
-                default: 'linux/amd64,linux/arm64'
-                type: string
-            dockerfile:
-                description: 'Path to Dockerfile'
-                required: false
-                default: 'Dockerfile'
-                type: string
-            image-suffix:
-                description: 'Suffix to append to image tags (e.g., -nvidia)'
-                required: false
-                default: ''
-                type: string
-        outputs:
-            digest:
-                description: 'Image digest'
-                value: ${{ jobs.build.outputs.digest }}
-            tags:
-                description: 'Image tags'
-                value: ${{ jobs.build.outputs.tags }}
+  workflow_call:
+    inputs:
+      push:
+        description: Push image to registry
+        required: false
+        default: false
+        type: boolean
+      platforms:
+        description: Target platforms
+        required: false
+        default: linux/amd64,linux/arm64
+        type: string
+      dockerfile:
+        description: Path to Dockerfile
+        required: false
+        default: Dockerfile
+        type: string
+      image-suffix:
+        description: Suffix to append to image tags
+        required: false
+        default: ""
+        type: string
+    outputs:
+      digest:
+        description: Image digest
+        value: ${{ jobs.build.outputs.digest }}
+      tags:
+        description: Image tags
+        value: ${{ jobs.build.outputs.tags }}
 
 env:
-    REGISTRY: ghcr.io
-    IMAGE_NAME: ${{ github.repository }}
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 concurrency:
-    group: docker-${{ github.ref }}-${{ inputs.dockerfile }}
-    cancel-in-progress: true
+  group: docker-${{ github.ref }}-${{ inputs.dockerfile }}
+  cancel-in-progress: true
 
 jobs:
-    build:
-        name: Build Docker Image
-        runs-on: ubuntu-latest
-        permissions:
-            contents: read
-            packages: write
-        outputs:
-            digest: ${{ steps.build-push.outputs.digest }}
-            tags: ${{ steps.meta.outputs.tags }}
+  build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.build-push.outputs.digest }}
+      tags: ${{ steps.meta.outputs.tags }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
 
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-              with:
-                  fetch-depth: 0
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
 
-            - name: Set up QEMU
-              uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
 
-            - name: Set up Docker Buildx
-              uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+      - name: Log in to Container Registry
+        if: inputs.push
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Log in to Container Registry
-              uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
-              with:
-                  registry: ${{ env.REGISTRY }}
-                  username: ${{ github.actor }}
-                  password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            suffix=${{ inputs.image-suffix }},onlatest=true
+          tags: |
+            type=ref,event=pr
+            type=semver,pattern=v{{version}}
+            type=semver,pattern=v{{major}}.{{minor}}
+            type=semver,pattern=v{{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || (github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')) }}
 
-            - name: Extract metadata for Docker
-              id: meta
-              uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6
-              with:
-                  images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-                  flavor: |
-                      suffix=${{ inputs.image-suffix }},onlatest=true
-                  tags: |
-                      # For PRs: pr-<number>
-                      type=ref,event=pr
-                      # For tags: v1.2.3, v1.2, v1 (preserving the v prefix)
-                      type=semver,pattern=v{{version}}
-                      type=semver,pattern=v{{major}}.{{minor}}
-                      type=semver,pattern=v{{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}
-                      # SHA for traceability
-                      type=sha,prefix=sha-
-                      # Latest on main or tags
-                      type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || (github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')) }}
+      - name: Get build information
+        id: build-info
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=dev-${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+          fi
+          echo "commit=${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+          echo "build_time=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
 
-            - name: Get build information
-              id: build-info
-              run: |
-                  if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-                    echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
-                  else
-                    echo "version=dev-${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
-                  fi
-                  echo "commit=${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
-                  echo "build_time=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
-
-            - name: Build and push Docker image
-              id: build-push
-              uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7
-              with:
-                  context: .
-                  file: ${{ inputs.dockerfile }}
-                                    platforms: ${{ inputs.push && inputs.platforms || 'linux/amd64' }}
-                                    push: ${{ inputs.push }}
-                                    load: ${{ !inputs.push }}
-                  tags: ${{ steps.meta.outputs.tags }}
-                  labels: ${{ steps.meta.outputs.labels }}
-                  build-args: |
-                      VERSION=${{ steps.build-info.outputs.version }}
-                      COMMIT=${{ steps.build-info.outputs.commit }}
-                      BUILD_TIME=${{ steps.build-info.outputs.build_time }}
-                  # Aggressive caching for faster builds
-                  cache-from: |
-                      type=gha,scope=buildkit-${{ inputs.dockerfile }}-${{ github.ref_name }}
-                      type=gha,scope=buildkit-${{ inputs.dockerfile }}-main
-                  cache-to: type=gha,mode=max,scope=buildkit-${{ inputs.dockerfile }}-${{ github.ref_name }}
-                  # Disable for faster builds
-                  provenance: false
-                  sbom: false
+      - name: Build and push Docker image
+        id: build-push
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7
+        with:
+          context: .
+          file: ${{ inputs.dockerfile }}
+          platforms: ${{ inputs.push && inputs.platforms || 'linux/amd64' }}
+          push: ${{ inputs.push }}
+          load: ${{ !inputs.push }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.build-info.outputs.version }}
+            COMMIT=${{ steps.build-info.outputs.commit }}
+            BUILD_TIME=${{ steps.build-info.outputs.build_time }}
+          cache-from: |
+            type=gha,scope=buildkit-${{ inputs.dockerfile }}-${{ github.ref_name }}
+            type=gha,scope=buildkit-${{ inputs.dockerfile }}-main
+          cache-to: type=gha,mode=max,scope=buildkit-${{ inputs.dockerfile }}-${{ github.ref_name }}
+          provenance: false
+          sbom: false
