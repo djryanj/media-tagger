@@ -181,12 +181,13 @@ prepare-release: _check-version
 	@echo "--- Restoring release files from HEAD ----------------------------"
 	@git restore --source=HEAD -- $(RELEASE_PACKAGE_FILES) CHANGELOG.md
 	@echo "--- Validating release files -------------------------------------"
-	@node scripts/release/bump-workspace-version.mjs --check "$(VERSION_NUM)" $(RELEASE_PACKAGE_FILES)
 	@node scripts/release/stamp-changelog.mjs --check "$(VERSION_NUM)" CHANGELOG.md
 	@echo "--- Creating branch release/$(VERSION_TAG) ------------------------"
 	@git checkout -b release/$(VERSION_TAG)
 	@echo "--- Bumping workspace package versions to $(VERSION_NUM) ---------"
-	@node scripts/release/bump-workspace-version.mjs "$(VERSION_NUM)" $(RELEASE_PACKAGE_FILES)
+	@npm pkg set version="$(VERSION_NUM)"
+	@npm --prefix apps/api pkg set version="$(VERSION_NUM)"
+	@npm --prefix apps/web pkg set version="$(VERSION_NUM)"
 	@echo "--- Stamping CHANGELOG.md -----------------------------------------"
 	@node scripts/release/stamp-changelog.mjs "$(VERSION_NUM)" CHANGELOG.md
 	@echo "--- Committing release preparation --------------------------------"
