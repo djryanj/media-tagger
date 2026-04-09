@@ -2,7 +2,9 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 
-const [version, ...files] = process.argv.slice(2);
+const args = process.argv.slice(2);
+const isCheckOnly = args[0] === "--check";
+const [version, ...files] = isCheckOnly ? args.slice(1) : args;
 
 if (!version) {
   console.error("Error: version argument is required.");
@@ -14,10 +16,32 @@ if (files.length === 0) {
   process.exit(1);
 }
 
-for (const file of files) {
+const parsedPackages = files.map((file) => {
   const contents = readFileSync(file, "utf8");
-  const pkg = JSON.parse(contents);
 
+  if (!contents.trim()) {
+    console.error(`Error: ${file} is empty.`);
+    process.exit(1);
+  }
+
+  try {
+    return {
+      file,
+      pkg: JSON.parse(contents),
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown JSON parse error.";
+    console.error(`Error: ${file} is not valid JSON. ${message}`);
+    process.exit(1);
+  }
+});
+
+if (isCheckOnly) {
+  process.exit(0);
+}
+
+for (const { file, pkg } of parsedPackages) {
   pkg.version = version;
 
   writeFileSync(file, `${JSON.stringify(pkg, null, 4)}\n`);

@@ -2,7 +2,11 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 
-const [version, changelogPath = "CHANGELOG.md"] = process.argv.slice(2);
+const args = process.argv.slice(2);
+const isCheckOnly = args[0] === "--check";
+const [version, changelogPath = "CHANGELOG.md"] = isCheckOnly
+  ? args.slice(1)
+  : args;
 
 if (!version) {
   console.error("Error: version argument is required.");
@@ -19,6 +23,10 @@ if (!pattern.test(current)) {
     `Error: ${changelogPath} does not contain \"## [${version}] - Unreleased\".`,
   );
   process.exit(1);
+}
+
+if (isCheckOnly) {
+  process.exit(0);
 }
 
 writeFileSync(
