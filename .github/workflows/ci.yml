@@ -128,7 +128,8 @@ jobs:
     needs: [changes, api, web]
     if: >-
       always() &&
-      (github.event_name == 'workflow_dispatch' || needs.changes.outputs.api == 'true' || needs.changes.outputs.web == 'true') &&
+      github.event_name == 'pull_request' &&
+      (needs.changes.outputs.api == 'true' || needs.changes.outputs.web == 'true') &&
       (needs.api.result == 'success' || needs.api.result == 'skipped') &&
       (needs.web.result == 'success' || needs.web.result == 'skipped')
     steps:
