@@ -181,9 +181,9 @@ prepare-release: _check-version
 	@echo "--- Creating branch release/$(VERSION_TAG) ------------------------"
 	@git checkout -b release/$(VERSION_TAG)
 	@echo "--- Bumping workspace package versions to $(VERSION_NUM) ---------"
-	@VERSION_NUM="$(VERSION_NUM)" node -e 'const fs = require("fs"); const files = process.argv.slice(1); const version = process.env.VERSION_NUM; for (const file of files) { const pkg = JSON.parse(fs.readFileSync(file, "utf8")); pkg.version = version; fs.writeFileSync(file, `${JSON.stringify(pkg, null, 4)}\n`); }' $(RELEASE_PACKAGE_FILES)
+	@node scripts/release/bump-workspace-version.mjs "$(VERSION_NUM)" $(RELEASE_PACKAGE_FILES)
 	@echo "--- Stamping CHANGELOG.md -----------------------------------------"
-	@VERSION_NUM="$(VERSION_NUM)" node -e 'const fs = require("fs"); const version = process.env.VERSION_NUM; const today = new Date().toISOString().slice(0, 10); const file = "CHANGELOG.md"; const current = fs.readFileSync(file, "utf8"); const pattern = new RegExp(`^## \\\\[${version.replace(/[.*+?^${}()|[\\]\\]/g, "\\\\$&")}\\\\] - Unreleased$`, "m"); if (!pattern.test(current)) { console.error(`Error: CHANGELOG.md does not contain \"## [${version}] - Unreleased\".`); process.exit(1); } fs.writeFileSync(file, current.replace(pattern, `## [${version}] - ${today}`));'
+	@node scripts/release/stamp-changelog.mjs "$(VERSION_NUM)" CHANGELOG.md
 	@echo "--- Committing release preparation --------------------------------"
 	@git add $(RELEASE_PACKAGE_FILES) CHANGELOG.md
 	@git commit -m "chore(release): prepare $(VERSION_TAG)"
