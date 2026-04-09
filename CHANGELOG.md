@@ -20,6 +20,7 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 - Hardened media type resolution to prefer detected file bytes over incorrect filename extensions or reported MIME types, while preserving the original media data and renaming downloads when needed.
 - Improved upload and deployment guidance across the UI, README, Compose, Kubernetes, and contributor instructions so RAM, `/tmp`, and upload-cap behavior stay aligned.
 - chore(deps-dev): bump vite from 8.0.7 to 8.0.8 [#8](https://github.com/djryanj/media-tagger/pull/8)
+- chore(deps-dev): bump vitest from 4.1.3 to 4.1.4 [#7](https://github.com/djryanj/media-tagger/pull/7)
 
 ### Fixed
 
