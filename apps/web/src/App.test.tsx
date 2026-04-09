@@ -7,8 +7,10 @@ import App from "./App";
 function buildConfigResponse(limitBytes = 512 * 1024 * 1024) {
   return new Response(
     JSON.stringify({
+      gitHash: "abc12345",
       inMemoryUploadLimitBytes: limitBytes,
       maxUploadBytes: 1024 * 1024 * 1024,
+      version: "v0.2.0",
     }),
     {
       status: 200,
@@ -46,6 +48,7 @@ describe("App", () => {
 
     render(<App />);
     await screen.findByText("The server accepts files up to 1 GB.");
+    expect(screen.getByText("Version v0.2.0 | Commit abc12345")).toBeVisible();
 
     await user.click(
       screen.getByRole("button", { name: "Tag and download files" }),
@@ -226,6 +229,10 @@ describe("App", () => {
 
     fetchMock.mockRejectedValueOnce(new Error("config unavailable"));
     render(<App />);
+
+    expect(
+      await screen.findByText("Build metadata unavailable."),
+    ).toBeVisible();
 
     expect(
       await screen.findByText(

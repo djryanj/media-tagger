@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project uses semantic version tags for releases.
 
+## [0.2.1] - Unreleased
+
+### Added
+
+- Server build metadata reporting so the running version and git hash are exposed in startup logs, propagated through containerized builds, and shown in the web UI for easier deployment verification. [#11](https://github.com/djryanj/media-tagger/issues/11)
+
 ## [0.2.0] - 2026-04-09
 
 ### Added

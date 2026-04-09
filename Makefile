@@ -10,6 +10,9 @@ VERSION ?=
 VERSION_TAG := $(if $(filter v%,$(VERSION)),$(VERSION),v$(VERSION))
 VERSION_NUM := $(patsubst v%,%,$(VERSION_TAG))
 RELEASE_PACKAGE_FILES := package.json apps/api/package.json apps/web/package.json
+PACKAGE_VERSION := $(shell sed -nE 's/^[[:space:]]*"version":[[:space:]]*"([^"]+)".*$$/\1/p' package.json | head -n 1)
+BUILD_VERSION ?= v$(PACKAGE_VERSION)
+BUILD_COMMIT ?= $(shell git rev-parse --short=8 HEAD 2>/dev/null || printf 'unknown')
 
 .DEFAULT_GOAL := $(DEFAULT_GOAL)
 
@@ -85,10 +88,10 @@ reset-deps: doctor
 	$(MAKE) install
 
 dev:
-	$(PNPM) dev
+	MEDIA_TAGGER_VERSION=$(BUILD_VERSION) MEDIA_TAGGER_GIT_HASH=$(BUILD_COMMIT) $(PNPM) dev
 
 dev-api:
-	$(PNPM) dev:api
+	MEDIA_TAGGER_VERSION=$(BUILD_VERSION) MEDIA_TAGGER_GIT_HASH=$(BUILD_COMMIT) $(PNPM) dev:api
 
 dev-web:
 	$(PNPM) dev:web
@@ -103,7 +106,7 @@ build-web:
 	$(PNPM) --filter $(WEB_FILTER) build
 
 docker-build:
-	docker build -t media-tagger:local .
+	docker build --build-arg VERSION=$(BUILD_VERSION) --build-arg COMMIT=$(BUILD_COMMIT) -t media-tagger:local .
 
 lint:
 	$(PNPM) lint
@@ -142,7 +145,7 @@ preview-web:
 	$(PNPM) --filter $(WEB_FILTER) preview
 
 start-api:
-	$(PNPM) --filter $(API_FILTER) start
+	MEDIA_TAGGER_VERSION=$(BUILD_VERSION) MEDIA_TAGGER_GIT_HASH=$(BUILD_COMMIT) $(PNPM) --filter $(API_FILTER) start
 
 ci: lint typecheck test build
 

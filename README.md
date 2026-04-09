@@ -55,6 +55,8 @@ The API chooses between two upload paths per file:
 
 The default upload cap is `1073741824` bytes, which is 1 GiB. The default in-memory threshold is `536870912` bytes, which is 512 MiB. The web UI reads both values from `GET /api/config` and sends each file's declared size with the upload so the server can choose a fast path early. The server still treats the observed stream size as authoritative and will spill to disk if a file grows past the configured memory threshold.
 
+The same config payload also exposes the running build version and git hash so the server startup log and the UI show exactly which build is serving requests.
+
 Operationally, that means:
 
 - Lowering the threshold reduces per-request RAM pressure.
@@ -99,7 +101,10 @@ Pushing the `vX.Y.Z` tag triggers [release.yml](.github/workflows/release.yml), 
 Build the image locally:
 
 ```bash
-docker build -t media-tagger:local .
+docker build \
+	--build-arg VERSION=v0.2.0 \
+	--build-arg COMMIT=$(git rev-parse --short=8 HEAD) \
+	-t media-tagger:local .
 ```
 
 Run it with a read-only filesystem, a writable tmpfs for metadata processing, and dropped Linux capabilities:
@@ -107,6 +112,8 @@ Run it with a read-only filesystem, a writable tmpfs for metadata processing, an
 ```bash
 docker run --rm \
 	--publish 3000:3000 \
+	--env MEDIA_TAGGER_VERSION=v0.2.0 \
+	--env MEDIA_TAGGER_GIT_HASH=$(git rev-parse --short=8 HEAD) \
 	--env MEDIA_TAGGER_MAX_UPLOAD_BYTES=1073741824 \
 	--env MEDIA_TAGGER_IN_MEMORY_UPLOAD_LIMIT_BYTES=536870912 \
 	--read-only \
@@ -123,12 +130,12 @@ The container serves both the React frontend and the Fastify API on port `3000`.
 The repository includes [compose.yml](compose.yml). Start the app with:
 
 ```bash
-docker-compose up --build
+MEDIA_TAGGER_VERSION=v0.2.0 MEDIA_TAGGER_GIT_HASH=$(git rev-parse --short=8 HEAD) docker-compose up --build
 ```
 
 Then open `http://127.0.0.1:3000`.
 
-Set `MEDIA_TAGGER_MAX_UPLOAD_BYTES` and `MEDIA_TAGGER_IN_MEMORY_UPLOAD_LIMIT_BYTES` in Compose when you want different upload-cap or RAM-threshold behavior than the defaults.
+Set `MEDIA_TAGGER_VERSION`, `MEDIA_TAGGER_GIT_HASH`, `MEDIA_TAGGER_MAX_UPLOAD_BYTES`, and `MEDIA_TAGGER_IN_MEMORY_UPLOAD_LIMIT_BYTES` in Compose when you want different build metadata, upload-cap, or RAM-threshold behavior than the defaults.
 
 ### Kubernetes
 

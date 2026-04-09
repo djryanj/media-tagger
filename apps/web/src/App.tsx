@@ -4,8 +4,10 @@ const ACCEPTED_FILE_TYPES = ".jpg,.jpeg,.png,.webp,.gif,.mp4,.mov";
 const MAX_FILES = 10;
 
 type ServerConfig = {
+  gitHash: string;
   inMemoryUploadLimitBytes: number;
   maxUploadBytes: number;
+  version: string;
 };
 
 type ProcessedDownload = {
@@ -229,6 +231,9 @@ export default function App() {
             Upload up to 10 supported files, enter one set of tags, and download
             each updated file with a canonical metadata payload.
           </p>
+          <p className="build-metadata">
+            {formatBuildMetadata(serverConfig, serverConfigState)}
+          </p>
         </header>
 
         <form className="tagger-form" onSubmit={handleSubmit}>
@@ -432,6 +437,21 @@ function formatServerThresholdCopy(
   }
 
   return `The server accepts files up to ${formatBytes(serverConfig.maxUploadBytes)}.`;
+}
+
+function formatBuildMetadata(
+  serverConfig: ServerConfig | null,
+  serverConfigState: "loading" | "ready" | "unavailable",
+): string {
+  if (serverConfigState === "loading") {
+    return "Loading build metadata...";
+  }
+
+  if (serverConfigState === "unavailable" || !serverConfig) {
+    return "Build metadata unavailable.";
+  }
+
+  return `Version ${serverConfig.version} | Commit ${serverConfig.gitHash}`;
 }
 
 function formatBytes(bytes: number): string {
