@@ -1,18 +1,36 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  DEFAULT_GIT_HASH,
   DEFAULT_MAX_UPLOAD_BYTES,
   DEFAULT_IN_MEMORY_UPLOAD_LIMIT_BYTES,
+  DEFAULT_VERSION,
+  GIT_HASH_ENV_VAR,
   getServerRuntimeConfig,
   IN_MEMORY_UPLOAD_LIMIT_ENV_VAR,
   MAX_UPLOAD_BYTES_ENV_VAR,
+  VERSION_ENV_VAR,
 } from "./config.js";
 
 describe("server runtime config", () => {
   it("defaults the in-memory upload limit to 512 MiB", () => {
     expect(getServerRuntimeConfig({})).toEqual({
+      gitHash: DEFAULT_GIT_HASH,
       inMemoryUploadLimitBytes: DEFAULT_IN_MEMORY_UPLOAD_LIMIT_BYTES,
       maxUploadBytes: DEFAULT_MAX_UPLOAD_BYTES,
+      version: DEFAULT_VERSION,
+    });
+  });
+
+  it("reads the build metadata from the environment", () => {
+    expect(
+      getServerRuntimeConfig({
+        [GIT_HASH_ENV_VAR]: "abc12345",
+        [VERSION_ENV_VAR]: "0.2.0",
+      }),
+    ).toMatchObject({
+      gitHash: "abc12345",
+      version: "v0.2.0",
     });
   });
 
@@ -37,8 +55,10 @@ describe("server runtime config", () => {
       [IN_MEMORY_UPLOAD_LIMIT_ENV_VAR]: "invalid",
       [MAX_UPLOAD_BYTES_ENV_VAR]: "invalid",
     })).toEqual({
+      gitHash: DEFAULT_GIT_HASH,
       inMemoryUploadLimitBytes: DEFAULT_IN_MEMORY_UPLOAD_LIMIT_BYTES,
       maxUploadBytes: DEFAULT_MAX_UPLOAD_BYTES,
+      version: DEFAULT_VERSION,
     });
   });
 

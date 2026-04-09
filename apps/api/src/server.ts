@@ -26,8 +26,9 @@ const SERVER_HOST = "0.0.0.0";
 const MODULE_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_WEB_DIST_DIRECTORY = resolve(MODULE_DIRECTORY, "../../web/dist");
 
-export function buildServer() {
-  const runtimeConfig = getServerRuntimeConfig();
+export function buildServer(
+  runtimeConfig = getServerRuntimeConfig(),
+) {
   const app = Fastify({
     bodyLimit: runtimeConfig.maxUploadBytes,
     logger: true,
@@ -263,11 +264,21 @@ export function buildServer() {
 }
 
 async function start() {
-  const app = buildServer();
+  const runtimeConfig = getServerRuntimeConfig();
+  const app = buildServer(runtimeConfig);
   const port = Number(process.env.PORT ?? 3000);
 
   try {
-    await app.listen({ port, host: SERVER_HOST });
+    const address = await app.listen({ port, host: SERVER_HOST });
+
+    app.log.info(
+      {
+        address,
+        gitHash: runtimeConfig.gitHash,
+        version: runtimeConfig.version,
+      },
+      "Media Tagger server started.",
+    );
   } catch (error) {
     app.log.error(error);
     process.exitCode = 1;

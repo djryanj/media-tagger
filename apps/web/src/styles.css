@@ -61,6 +61,14 @@ h1 {
   color: #4d4d4d;
 }
 
+.build-metadata {
+  margin: 0;
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #686868;
+}
+
 .tagger-form {
   display: grid;
   gap: 14px;

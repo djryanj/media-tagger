@@ -25,8 +25,13 @@ RUN CI=true pnpm build && CI=true pnpm prune --prod
 
 FROM node:24-bookworm-slim AS runtime
 
+ARG VERSION=v0.0.0-dev
+ARG COMMIT=unknown
+
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV MEDIA_TAGGER_VERSION=${VERSION}
+ENV MEDIA_TAGGER_GIT_HASH=${COMMIT}
 
 WORKDIR /app
 

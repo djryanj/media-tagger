@@ -5,12 +5,17 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        VERSION: ${MEDIA_TAGGER_VERSION:-v0.0.0-dev}
+        COMMIT: ${MEDIA_TAGGER_GIT_HASH:-unknown}
     image: media-tagger:local
     ports:
       - "3000:3000"
     environment:
       PORT: "3000"
       NODE_ENV: production
+      MEDIA_TAGGER_VERSION: ${MEDIA_TAGGER_VERSION:-v0.0.0-dev}
+      MEDIA_TAGGER_GIT_HASH: ${MEDIA_TAGGER_GIT_HASH:-unknown}
       MEDIA_TAGGER_MAX_UPLOAD_BYTES: "1073741824"
       MEDIA_TAGGER_IN_MEMORY_UPLOAD_LIMIT_BYTES: "536870912"
     read_only: true
