@@ -103,6 +103,27 @@
             "groupSlug": "docker"
         },
         {
+            "description": "Keep runtime and CI on Node 24 until upgraded intentionally",
+            "matchManagers": [
+                "dockerfile",
+                "custom.regex"
+            ],
+            "matchPackageNames": [
+                "node"
+            ],
+            "allowedVersions": "/^24($|[.-])/"
+        },
+        {
+            "description": "Keep the devcontainer base image on Node 24 until upgraded intentionally",
+            "matchManagers": [
+                "dockerfile"
+            ],
+            "matchPackageNames": [
+                "mcr.microsoft.com/devcontainers/javascript-node"
+            ],
+            "allowedVersions": "/^24($|[.-])/"
+        },
+        {
             "description": "Group npm workspace updates",
             "matchManagers": [
                 "npm"
