@@ -178,6 +178,8 @@ prepare-release: _check-version
 		echo "Error: release/$(VERSION_TAG) already exists on origin."; \
 		exit 1; \
 	fi
+	@echo "--- Restoring release files from HEAD ----------------------------"
+	@git restore --source=HEAD -- $(RELEASE_PACKAGE_FILES) CHANGELOG.md
 	@echo "--- Validating release files -------------------------------------"
 	@node scripts/release/bump-workspace-version.mjs --check "$(VERSION_NUM)" $(RELEASE_PACKAGE_FILES)
 	@node scripts/release/stamp-changelog.mjs --check "$(VERSION_NUM)" CHANGELOG.md
