@@ -21,6 +21,7 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 - Improved upload and deployment guidance across the UI, README, Compose, Kubernetes, and contributor instructions so RAM, `/tmp`, and upload-cap behavior stay aligned.
 - chore(deps-dev): bump vite from 8.0.7 to 8.0.8 [#8](https://github.com/djryanj/media-tagger/pull/8)
 - chore(deps-dev): bump vitest from 4.1.3 to 4.1.4 [#7](https://github.com/djryanj/media-tagger/pull/7)
+- chore(deps-dev): bump eslint from 9.39.4 to 10.2.0 [#3](https://github.com/djryanj/media-tagger/pull/3)
 
 ### Fixed
 
