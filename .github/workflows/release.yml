@@ -95,8 +95,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ffmpeg libimage-exiftool-perl
 
-      - name: Install Playwright Chromium
-        run: pnpm --filter @media-tagger/web exec playwright install --with-deps chromium
+      - name: Install Playwright browsers
+        run: pnpm --filter @media-tagger/web exec playwright install --with-deps chromium firefox
 
       - name: Run Playwright tests
         run: make test-e2e-web
