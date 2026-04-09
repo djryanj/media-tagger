@@ -7,7 +7,7 @@ Build a mobile-first web app with one fast workflow:
 1. Upload a still image, GIF, or video.
 2. Select up to 10 files for one tagging pass.
 3. Enter tags.
-4. Write a metadata payload in the exact shape `tags:<csv list of tags>` with optional trailing `;`.
+4. Write a metadata payload in the exact shape `tags:<csv list of tags>`.
 5. Download each updated file back in the browser.
 
 The app must run in Docker, use devcontainers for development, include Makefile support, and ship with strong unit, integration, and e2e coverage plus GitHub CI workflows.
@@ -45,7 +45,10 @@ The app must run in Docker, use devcontainers for development, include Makefile 
 ## Metadata Strategy
 
 - Treat the rendered string as the canonical payload.
-- Build the payload from normalized tags, joined by commas, with an optional trailing semicolon.
+- Build the payload from normalized tags, joined by commas.
+- If a supported upload's extension or reported MIME type is wrong, detect the actual file type from the uploaded bytes, tag it without transcoding, and rename the download if the extension must change.
+- Accept uploads up to `MEDIA_TAGGER_MAX_UPLOAD_BYTES`, defaulting to 1 GiB.
+- Buffer smaller uploads in memory and stage larger uploads on disk, with the in-memory threshold controlled by `MEDIA_TAGGER_IN_MEMORY_UPLOAD_LIMIT_BYTES` and defaulting to 512 MiB.
 - Write to format-appropriate fields rather than forcing one exact container field for every type.
 - Read the metadata back after writing during tests to confirm the payload survives round-trip.
 - Keep the mapping logic centralized so supported formats can expand without changing the UI.
@@ -63,11 +66,11 @@ If a format cannot safely store the payload in a writable metadata field, fail c
 - `POST /api/media/tag`
 - Multipart form fields:
   - `file`
+  - `fileSize`
   - `tags`
-  - `terminateWithSemicolon`
 - Response:
   - Updated binary stream
-  - Preserved or normalized filename
+  - Preserved or normalized filename, including extension correction when the detected type differs from the upload name
   - Correct content type and attachment headers
 
 The web app may call this endpoint once per selected file so the browser can download each updated result individually.
@@ -78,7 +81,6 @@ The web app may call this endpoint once per selected file so the browser can dow
 - Controls only for:
   - Multi-file picker with an upper limit of 10 files
   - Tags input
-  - Optional semicolon toggle
   - Submit action
   - Success or failure state
 - Prioritize low-latency interaction and minimal copy.

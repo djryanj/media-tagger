@@ -11,9 +11,11 @@ services:
     environment:
       PORT: "3000"
       NODE_ENV: production
+      MEDIA_TAGGER_MAX_UPLOAD_BYTES: "1073741824"
+      MEDIA_TAGGER_IN_MEMORY_UPLOAD_LIMIT_BYTES: "536870912"
     read_only: true
     tmpfs:
-      - /tmp:rw,noexec,nosuid,size=256m
+      - /tmp:rw,noexec,nosuid,size=2g
     security_opt:
       - no-new-privileges:true
     cap_drop:

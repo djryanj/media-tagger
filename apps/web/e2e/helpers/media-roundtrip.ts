@@ -9,7 +9,7 @@ import type { Download } from "@playwright/test";
 
 const execFileAsync = promisify(execFile);
 const TEST_TAGS = "forest, timelapse";
-const EXPECTED_PAYLOAD = "tags:forest,timelapse;";
+const EXPECTED_PAYLOAD = "tags:forest,timelapse";
 
 export type MediaFixture = {
   filename: string;
@@ -28,10 +28,6 @@ export async function runMediaRoundTrip(page: Page, fixture: MediaFixture) {
     await page.goto("/");
     await page.locator("#media-file").setInputFiles(sourcePath);
     await page.locator("#media-tags").fill(TEST_TAGS);
-    await page
-      .getByRole("checkbox", { name: /terminate with semicolon/i })
-      .setChecked(true, { force: true });
-    await page.locator("#semicolon-toggle").blur();
 
     const submitButton = page.getByRole("button", {
       name: "Tag and download files",
@@ -83,10 +79,6 @@ export async function runMultiFileRoundTrip(
     await page.goto("/");
     await page.locator("#media-file").setInputFiles(sourcePaths);
     await page.locator("#media-tags").fill(TEST_TAGS);
-    await page
-      .getByRole("checkbox", { name: /terminate with semicolon/i })
-      .setChecked(true, { force: true });
-    await page.locator("#semicolon-toggle").blur();
 
     const submitButton = page.getByRole("button", {
       name: "Tag and download files",
@@ -133,6 +125,19 @@ export async function runMultiFileRoundTrip(
     );
 
     await expect(page.getByText("Downloaded 2 of 2 files.")).toBeVisible();
+    const processedFiles = page.getByLabel("Processed files");
+    const firstManualDownloadButton = processedFiles
+      .getByRole("button", { name: "Download" })
+      .first();
+
+    await expect(processedFiles).toBeVisible();
+    await expect(processedFiles.getByRole("button", { name: "Download" })).toHaveCount(2);
+    await firstManualDownloadButton.evaluate((button) => {
+      (button as HTMLButtonElement).click();
+    });
+    await expect(
+      page.getByText(`Manual download started for ${downloads[0]?.suggestedFilename()}.`),
+    ).toBeVisible();
   } finally {
     await rm(temporaryDirectory, { force: true, recursive: true });
   }

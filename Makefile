@@ -4,7 +4,8 @@ PNPM ?= pnpm
 DEFAULT_GOAL := help
 API_FILTER := @media-tagger/api
 WEB_FILTER := @media-tagger/web
-PLAYWRIGHT_BROWSER ?= chromium
+PLAYWRIGHT_BROWSERS ?= chromium firefox
+PLAYWRIGHT_PROJECT ?=
 VERSION ?=
 VERSION_TAG := $(if $(filter v%,$(VERSION)),$(VERSION),v$(VERSION))
 VERSION_NUM := $(patsubst v%,%,$(VERSION_TAG))
@@ -18,6 +19,7 @@ help:
 	@printf "Targets:\n"
 	@printf "  make doctor       Verify required local tooling\n"
 	@printf "  make install      Install workspace dependencies\n"
+	@printf "                   Default Playwright browsers: $(PLAYWRIGHT_BROWSERS)\n"
 	@printf "  make setup        Alias for install\n"
 	@printf "  make reset-deps   Remove workspace dependencies and reinstall from lockfile\n"
 	@printf "  make dev          Start API and web dev servers\n"
@@ -37,6 +39,7 @@ help:
 	@printf "  make test-api     Run tests for the API package\n"
 	@printf "  make test-web     Run tests for the web package\n"
 	@printf "  make test-e2e-web Run the web Playwright end-to-end tests\n"
+	@printf "                   Optional: PLAYWRIGHT_PROJECT=mobile-firefox\n"
 	@printf "  make show-report-e2e-web Serve the Playwright HTML report on 0.0.0.0\n"
 	@printf "  make preview-web  Preview the built web app\n"
 	@printf "  make start-api    Start the built API server\n"
@@ -73,7 +76,7 @@ install: doctor-tools
 	$(MAKE) install-playwright
 
 install-playwright:
-	$(PNPM) --filter $(WEB_FILTER) exec playwright install $(PLAYWRIGHT_BROWSER)
+	$(PNPM) --filter $(WEB_FILTER) exec playwright install $(PLAYWRIGHT_BROWSERS)
 
 setup: install
 
@@ -130,7 +133,7 @@ test-web:
 	$(PNPM) --filter $(WEB_FILTER) test
 
 test-e2e-web:
-	$(PNPM) test:e2e:web
+	$(PNPM) --filter $(WEB_FILTER) exec playwright test $(if $(PLAYWRIGHT_PROJECT),--project $(PLAYWRIGHT_PROJECT),)
 
 show-report-e2e-web:
 	$(PNPM) --filter $(WEB_FILTER) exec playwright show-report --host 0.0.0.0 --port 9323

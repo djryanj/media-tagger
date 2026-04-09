@@ -4,6 +4,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "./App";
 
+function buildConfigResponse(limitBytes = 512 * 1024 * 1024) {
+  return new Response(
+    JSON.stringify({
+      inMemoryUploadLimitBytes: limitBytes,
+      maxUploadBytes: 1024 * 1024 * 1024,
+    }),
+    {
+      status: 200,
+      headers: {
+        "content-type": "application/json",
+      },
+    },
+  );
+}
+
+function getUploadCalls(fetchMock: ReturnType<typeof vi.mocked<typeof fetch>>) {
+  return fetchMock.mock.calls.filter(([input]) => input === "/api/media/tag");
+}
+
 describe("App", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn());
@@ -21,8 +40,12 @@ describe("App", () => {
 
   it("requires a file and tags before submitting", async () => {
     const user = userEvent.setup();
+    const fetchMock = vi.mocked(fetch);
+
+    fetchMock.mockResolvedValueOnce(buildConfigResponse());
 
     render(<App />);
+    await screen.findByText("The server accepts files up to 1 GB.");
 
     await user.click(
       screen.getByRole("button", { name: "Tag and download files" }),
@@ -31,7 +54,7 @@ describe("App", () => {
     expect(
       screen.getByText("Choose at least one file before submitting."),
     ).toBeVisible();
-    expect(fetch).not.toHaveBeenCalled();
+    expect(getUploadCalls(fetchMock)).toHaveLength(0);
   });
 
   it("submits each selected file and downloads the tagged results", async () => {
@@ -46,12 +69,15 @@ describe("App", () => {
       }),
     ];
 
+    fetchMock.mockResolvedValueOnce(buildConfigResponse());
     fetchMock.mockResolvedValueOnce(
       new Response(new Blob(["tagged-media-1"]), {
         status: 200,
         headers: {
           "content-disposition": 'attachment; filename="tagged-sample-1.png"',
           "content-type": "image/png",
+          "x-media-tagger-file-resolution":
+            "sample-1.png: the reported MIME type image/jpeg did not match detected image/png. Tagged the detected media type without transcoding.",
         },
       }),
     );
@@ -66,6 +92,7 @@ describe("App", () => {
     );
 
     render(<App />);
+    await screen.findByText("The server accepts files up to 1 GB.");
 
     await user.upload(
       screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
@@ -76,30 +103,82 @@ describe("App", () => {
       "forest, timelapse",
     );
     await user.click(
-      screen.getByRole("checkbox", { name: /terminate with semicolon/i }),
+      screen.getByRole("button", { name: "Tag and download files" }),
+    );
+
+    await waitFor(() => expect(getUploadCalls(fetchMock)).toHaveLength(2));
+
+    const uploadCalls = getUploadCalls(fetchMock);
+    const firstRequest = uploadCalls[0]?.[1];
+    const secondRequest = uploadCalls[1]?.[1];
+    const firstFormData = firstRequest?.body as FormData;
+    const secondFormData = secondRequest?.body as FormData;
+
+    expect(firstFormData).toBeInstanceOf(FormData);
+    expect(firstFormData.get("fileSize")).toBe(String(uploadedFiles[0]?.size));
+    expect(firstFormData.get("tags")).toBe("forest, timelapse");
+    expect((firstFormData.get("file") as File).name).toBe("sample-1.png");
+    expect((secondFormData.get("file") as File).name).toBe("sample-2.png");
+    expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledTimes(2);
+    expect(screen.getByText("Downloaded 2 of 2 files.")).toBeVisible();
+    expect(screen.getByText("Processed files")).toBeVisible();
+    expect(screen.getByText("Saves as tagged-sample-1.png")).toBeVisible();
+    expect(screen.getByText("Saves as tagged-sample-2.png")).toBeVisible();
+    expect(screen.getAllByRole("button", { name: "Download" })).toHaveLength(2);
+    expect(
+      screen.getByText(
+        "sample-1.png: the reported MIME type image/jpeg did not match detected image/png. Tagged the detected media type without transcoding.",
+      ),
+    ).toBeVisible();
+  });
+
+  it("allows manual re-download of processed files", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.mocked(fetch);
+    const uploadedFile = new File(["png-data-1"], "sample-1.png", {
+      type: "image/png",
+    });
+
+    fetchMock.mockResolvedValueOnce(buildConfigResponse());
+    fetchMock.mockResolvedValueOnce(
+      new Response(new Blob(["tagged-media-1"]), {
+        status: 200,
+        headers: {
+          "content-disposition": 'attachment; filename="tagged-sample-1.png"',
+          "content-type": "image/png",
+        },
+      }),
+    );
+
+    render(<App />);
+    await screen.findByText("The server accepts files up to 1 GB.");
+
+    await user.upload(
+      screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+      uploadedFile,
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: /tags/i }),
+      "forest, timelapse",
     );
     await user.click(
       screen.getByRole("button", { name: "Tag and download files" }),
     );
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(getUploadCalls(fetchMock)).toHaveLength(1));
+    expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledTimes(1);
 
-    const firstRequest = fetchMock.mock.calls[0]?.[1];
-    const secondRequest = fetchMock.mock.calls[1]?.[1];
-    const firstFormData = firstRequest?.body as FormData;
-    const secondFormData = secondRequest?.body as FormData;
+    await user.click(screen.getByRole("button", { name: "Download" }));
 
-    expect(firstFormData).toBeInstanceOf(FormData);
-    expect(firstFormData.get("tags")).toBe("forest, timelapse");
-    expect(firstFormData.get("terminateWithSemicolon")).toBe("true");
-    expect((firstFormData.get("file") as File).name).toBe("sample-1.png");
-    expect((secondFormData.get("file") as File).name).toBe("sample-2.png");
     expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledTimes(2);
-    expect(screen.getByText("Downloaded 2 of 2 files.")).toBeVisible();
+    expect(
+      screen.getByText("Manual download started for tagged-sample-1.png."),
+    ).toBeVisible();
   });
 
   it("rejects selecting more than 10 files", async () => {
     const user = userEvent.setup();
+    const fetchMock = vi.mocked(fetch);
     const uploadedFiles = Array.from(
       { length: 11 },
       (_, index) =>
@@ -108,7 +187,9 @@ describe("App", () => {
         }),
     );
 
+    fetchMock.mockResolvedValueOnce(buildConfigResponse());
     render(<App />);
+    await screen.findByText("The server accepts files up to 1 GB.");
 
     await user.upload(
       screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
@@ -119,6 +200,76 @@ describe("App", () => {
       screen.getByText("Choose no more than 10 files at once."),
     ).toBeVisible();
     expect(screen.getByText("No files selected")).toBeVisible();
-    expect(fetch).not.toHaveBeenCalled();
+    expect(getUploadCalls(fetchMock)).toHaveLength(0);
+  });
+
+  it("shows the overwrite warning and server threshold before submission", async () => {
+    const fetchMock = vi.mocked(fetch);
+
+    fetchMock.mockResolvedValueOnce(buildConfigResponse());
+    render(<App />);
+
+    expect(
+      await screen.findByText("The server accepts files up to 1 GB."),
+    ).toBeVisible();
+
+    expect(screen.getByText("Overwrite warning")).toBeVisible();
+    expect(
+      screen.getByText(
+        "Existing metadata in the supported description or comment field for each uploaded file will be replaced by the new payload.",
+      ),
+    ).toBeVisible();
+  });
+
+  it("shows when the server threshold cannot be loaded", async () => {
+    const fetchMock = vi.mocked(fetch);
+
+    fetchMock.mockRejectedValueOnce(new Error("config unavailable"));
+    render(<App />);
+
+    expect(
+      await screen.findByText(
+        "Server upload configuration unavailable. The server will still accept uploads, but the exact memory threshold and upload cap could not be loaded.",
+      ),
+    ).toBeVisible();
+  });
+
+  it("rejects files larger than the server upload cap before submitting", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.mocked(fetch);
+    const oversizedFile = new File(["x"], "oversized.mp4", {
+      type: "video/mp4",
+    });
+    Object.defineProperty(oversizedFile, "size", { value: 2048 });
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          inMemoryUploadLimitBytes: 1024,
+          maxUploadBytes: 1024,
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+          },
+        },
+      ),
+    );
+
+    render(<App />);
+    await screen.findByText("The server accepts files up to 1 KB.");
+
+    await user.upload(
+      screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+      oversizedFile,
+    );
+    await user.type(screen.getByRole("textbox", { name: /tags/i }), "test");
+    await user.click(
+      screen.getByRole("button", { name: "Tag and download files" }),
+    );
+
+    expect(screen.getByText("Choose files no larger than 1 KB.")).toBeVisible();
+    expect(getUploadCalls(fetchMock)).toHaveLength(0);
   });
 });

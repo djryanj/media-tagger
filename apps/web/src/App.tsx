@@ -1,15 +1,74 @@
-import { ChangeEvent, FormEvent, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 
 const ACCEPTED_FILE_TYPES = ".jpg,.jpeg,.png,.webp,.gif,.mp4,.mov";
 const MAX_FILES = 10;
 
+type ServerConfig = {
+  inMemoryUploadLimitBytes: number;
+  maxUploadBytes: number;
+};
+
+type ProcessedDownload = {
+  id: string;
+  downloadFilename: string;
+  sourceFilename: string;
+  blob: Blob;
+};
+
 export default function App() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [tags, setTags] = useState("");
-  const [terminateWithSemicolon, setTerminateWithSemicolon] = useState(false);
   const [status, setStatus] = useState<string>("Ready for upload.");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [processedDownloads, setProcessedDownloads] = useState<
+    ProcessedDownload[]
+  >([]);
+  const [serverConfig, setServerConfig] = useState<ServerConfig | null>(null);
+  const [serverConfigState, setServerConfigState] = useState<
+    "loading" | "ready" | "unavailable"
+  >("loading");
+  const [warningMessages, setWarningMessages] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadServerConfig() {
+      try {
+        const response = await fetch("/api/config");
+
+        if (!response.ok) {
+          throw new Error("Config request failed.");
+        }
+
+        const payload = (await response.json()) as ServerConfig;
+
+        if (!isActive) {
+          return;
+        }
+
+        setServerConfig(payload);
+        setServerConfigState("ready");
+      } catch {
+        if (!isActive) {
+          return;
+        }
+
+        setServerConfigState("unavailable");
+      }
+    }
+
+    void loadServerConfig();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  function handleManualDownload(download: ProcessedDownload) {
+    triggerDownload(download.blob, download.downloadFilename);
+    setStatus(`Manual download started for ${download.downloadFilename}.`);
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -24,11 +83,24 @@ export default function App() {
       return;
     }
 
+    if (
+      serverConfig &&
+      selectedFiles.some((file) => file.size > serverConfig.maxUploadBytes)
+    ) {
+      setErrorMessage(
+        `Choose files no larger than ${formatBytes(serverConfig.maxUploadBytes)}.`,
+      );
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMessage(null);
+    setProcessedDownloads([]);
+    setWarningMessages([]);
 
     const failures: Array<{ file: string; message: string }> = [];
     const downloadedFilenames: string[] = [];
+    const responseWarnings = new Set<string>();
 
     try {
       for (const [index, file] of selectedFiles.entries()) {
@@ -40,12 +112,9 @@ export default function App() {
 
         try {
           const formData = new FormData();
-          formData.append("file", file);
+          formData.append("fileSize", String(file.size));
           formData.append("tags", tags);
-          formData.append(
-            "terminateWithSemicolon",
-            String(terminateWithSemicolon),
-          );
+          formData.append("file", file);
 
           const response = await fetch("/api/media/tag", {
             method: "POST",
@@ -62,7 +131,33 @@ export default function App() {
             getFilenameFromContentDisposition(
               response.headers.get("content-disposition"),
             ) ?? file.name;
+          const resolutionWarning = response.headers.get(
+            "x-media-tagger-file-resolution",
+          );
 
+          if (resolutionWarning) {
+            responseWarnings.add(resolutionWarning);
+          }
+
+          const completedDownload = {
+            id: `${index}-${file.name}-${downloadFilename}`,
+            blob,
+            downloadFilename,
+            sourceFilename: file.name,
+          };
+
+          setProcessedDownloads((previousDownloads) => {
+            if (
+              previousDownloads.some(
+                (previousDownload) =>
+                  previousDownload.id === completedDownload.id,
+              )
+            ) {
+              return previousDownloads;
+            }
+
+            return [...previousDownloads, completedDownload];
+          });
           triggerDownload(blob, downloadFilename);
           downloadedFilenames.push(downloadFilename);
         } catch (error) {
@@ -79,6 +174,8 @@ export default function App() {
       if (failures.length > 0) {
         setErrorMessage(formatFailureMessage(failures));
       }
+
+      setWarningMessages(Array.from(responseWarnings));
 
       if (downloadedFilenames.length === 0) {
         setStatus("Request failed.");
@@ -101,12 +198,14 @@ export default function App() {
     if (files.length > MAX_FILES) {
       event.target.value = "";
       setSelectedFiles([]);
+      setProcessedDownloads([]);
       setErrorMessage(`Choose no more than ${MAX_FILES} files at once.`);
       setStatus("Ready for upload.");
       return;
     }
 
     setSelectedFiles(files);
+    setProcessedDownloads([]);
 
     if (files.length > 0) {
       setStatus(
@@ -138,6 +237,9 @@ export default function App() {
             <span className="field-help">
               Supported formats: JPG, JPEG, PNG, WebP, GIF, MP4, and MOV. Tag up
               to 10 files at once, then download each result individually.
+            </span>
+            <span className="field-help">
+              {formatServerThresholdCopy(serverConfig, serverConfigState)}
             </span>
             <span className="file-picker-row">
               <span className="file-picker-button">Choose files</span>
@@ -183,25 +285,16 @@ export default function App() {
             />
           </label>
 
-          <label className="toggle-card" htmlFor="semicolon-toggle">
-            <div>
-              <span className="field-label">Terminate with semicolon</span>
-              <p className="field-help">
-                Adds a trailing semicolon so the final payload becomes
-                <strong> tags:tag-one,tag-two;</strong>
-              </p>
-            </div>
-
-            <input
-              checked={terminateWithSemicolon}
-              className="toggle-input"
-              id="semicolon-toggle"
-              onChange={(event) =>
-                setTerminateWithSemicolon(event.target.checked)
-              }
-              type="checkbox"
-            />
-          </label>
+          <section
+            className="field-card warning-card"
+            aria-label="Overwrite warning"
+          >
+            <span className="field-label">Overwrite warning</span>
+            <p className="field-help">
+              Existing metadata in the supported description or comment field
+              for each uploaded file will be replaced by the new payload.
+            </p>
+          </section>
 
           <button
             className="submit-button"
@@ -212,8 +305,48 @@ export default function App() {
           </button>
         </form>
 
+        {processedDownloads.length > 0 ? (
+          <section className="download-results" aria-label="Processed files">
+            <div className="download-results-header">
+              <h2>Processed files</h2>
+              <p className="field-help">
+                Automatic download was attempted for each file. If your device
+                delayed or blocked one, use the download button next to that
+                file.
+              </p>
+            </div>
+
+            <ul className="download-result-list">
+              {processedDownloads.map((download) => (
+                <li className="download-result-item" key={download.id}>
+                  <div className="download-result-copy">
+                    <span className="field-value">
+                      {download.sourceFilename}
+                    </span>
+                    <span className="download-result-name">
+                      Saves as {download.downloadFilename}
+                    </span>
+                  </div>
+                  <button
+                    className="secondary-button"
+                    onClick={() => handleManualDownload(download)}
+                    type="button"
+                  >
+                    Download
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
         <footer className="status-strip" aria-live="polite">
           <span>{status}</span>
+          {warningMessages.map((message) => (
+            <span className="status-warning" key={message}>
+              {message}
+            </span>
+          ))}
           {errorMessage ? (
             <span className="status-error">{errorMessage}</span>
           ) : null}
@@ -284,4 +417,39 @@ function formatFailureMessage(
   return `Failed files: ${failures
     .map((failure) => `${failure.file} (${failure.message})`)
     .join("; ")}`;
+}
+
+function formatServerThresholdCopy(
+  serverConfig: ServerConfig | null,
+  serverConfigState: "loading" | "ready" | "unavailable",
+): string {
+  if (serverConfigState === "loading") {
+    return "Loading server upload threshold...";
+  }
+
+  if (serverConfigState === "unavailable" || !serverConfig) {
+    return "Server upload configuration unavailable. The server will still accept uploads, but the exact memory threshold and upload cap could not be loaded.";
+  }
+
+  return `The server accepts files up to ${formatBytes(serverConfig.maxUploadBytes)}.`;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes >= 1024 * 1024 * 1024) {
+    return `${stripTrailingZeroes((bytes / (1024 * 1024 * 1024)).toFixed(1))} GB`;
+  }
+
+  if (bytes >= 1024 * 1024) {
+    return `${stripTrailingZeroes((bytes / (1024 * 1024)).toFixed(1))} MB`;
+  }
+
+  if (bytes >= 1024) {
+    return `${stripTrailingZeroes((bytes / 1024).toFixed(1))} KB`;
+  }
+
+  return `${bytes} ${bytes === 1 ? "byte" : "bytes"}`;
+}
+
+function stripTrailingZeroes(value: string): string {
+  return value.replace(/\.0$/, "");
 }
