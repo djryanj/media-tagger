@@ -1,0 +1,20 @@
+{
+    "name": "media-tagger",
+    "version": "0.1.0",
+    "private": true,
+    "packageManager": "pnpm@10.33.0",
+    "engines": {
+        "node": "^20.19.0 || ^22.13.0 || >=24.0.0"
+    },
+    "scripts": {
+        "dev": "pnpm --parallel --filter @media-tagger/api --filter @media-tagger/web dev",
+        "dev:api": "pnpm --filter @media-tagger/api dev",
+        "dev:web": "pnpm --filter @media-tagger/web dev",
+        "build": "pnpm -r build",
+        "start:prod": "pnpm build && pnpm --filter @media-tagger/api start",
+        "typecheck": "pnpm -r typecheck",
+        "lint": "pnpm -r lint",
+        "test": "pnpm -r test",
+        "test:e2e:web": "pnpm --filter @media-tagger/web test:e2e"
+    }
+}

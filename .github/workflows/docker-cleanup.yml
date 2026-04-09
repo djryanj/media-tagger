@@ -1,0 +1,93 @@
+name: Docker PR Cleanup
+
+on:
+    pull_request:
+        types: [closed]
+
+env:
+    REGISTRY: ghcr.io
+
+jobs:
+    cleanup:
+        name: Delete PR Docker Image
+        runs-on: ubuntu-latest
+        permissions:
+            packages: write
+
+        steps:
+            - name: Delete PR images via GitHub API
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  PACKAGE_NAME: ${{ github.event.repository.name }}
+                  PR_NUMBER: ${{ github.event.pull_request.number }}
+              run: |
+                  set -e
+
+                  echo "Cleaning up all images for PR #${PR_NUMBER}"
+
+                  # Determine if this is a user or org repository
+                  OWNER="${{ github.repository_owner }}"
+                  OWNER_TYPE=$(gh api "/users/${OWNER}" --jq '.type' 2>/dev/null || echo "Organization")
+
+                  if [ "$OWNER_TYPE" = "User" ]; then
+                    API_PATH="users/${OWNER}"
+                  else
+                    API_PATH="orgs/${OWNER}"
+                  fi
+
+                  echo "Using API path: ${API_PATH}/packages/container/${PACKAGE_NAME}"
+
+                  # Get all versions and find ALL with tags containing pr-<number>
+                  # This will match both pr-231 and pr-231-nvidia, as well as any other variants
+                  VERSION_IDS=$(gh api \
+                    -H "Accept: application/vnd.github+json" \
+                    "/${API_PATH}/packages/container/${PACKAGE_NAME}/versions?per_page=100" \
+                    --jq ".[] | select(.metadata.container.tags // [] | any(test(\"^pr-${PR_NUMBER}(-.*)?$\"))) | .id" \
+                    2>/dev/null || echo "")
+
+                  if [ -z "$VERSION_IDS" ]; then
+                    echo "No images found for PR #${PR_NUMBER} - nothing to delete"
+                    exit 0
+                  fi
+
+                  # Count and display what we found
+                  VERSION_COUNT=$(echo "$VERSION_IDS" | wc -l)
+                  echo "Found ${VERSION_COUNT} version(s) to delete"
+
+                  # Delete each version
+                  DELETED=0
+                  FAILED=0
+                  while IFS= read -r VERSION_ID; do
+                    if [ -z "$VERSION_ID" ]; then
+                      continue
+                    fi
+
+                    # Get tags for this version for logging
+                    TAGS=$(gh api \
+                      -H "Accept: application/vnd.github+json" \
+                      "/${API_PATH}/packages/container/${PACKAGE_NAME}/versions/${VERSION_ID}" \
+                      --jq '.metadata.container.tags | join(", ")' \
+                      2>/dev/null || echo "unknown")
+
+                    echo "Deleting version ${VERSION_ID} with tags: ${TAGS}"
+
+                    if gh api \
+                      --method DELETE \
+                      -H "Accept: application/vnd.github+json" \
+                      "/${API_PATH}/packages/container/${PACKAGE_NAME}/versions/${VERSION_ID}" \
+                      --silent 2>&1; then
+                      echo "  ✓ Successfully deleted"
+                      DELETED=$((DELETED + 1))
+                    else
+                      echo "  ✗ Failed to delete"
+                      FAILED=$((FAILED + 1))
+                    fi
+                  done <<< "$VERSION_IDS"
+
+                  echo ""
+                  echo "Cleanup complete: ${DELETED} deleted, ${FAILED} failed"
+
+                  if [ $FAILED -gt 0 ]; then
+                    echo "Warning: Some versions could not be deleted"
+                    exit 1
+                  fi

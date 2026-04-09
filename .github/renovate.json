@@ -1,0 +1,143 @@
+{
+    "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+    "extends": [
+        "config:recommended",
+        ":dependencyDashboard",
+        ":semanticCommits",
+        ":automergeDigest",
+        "group:allNonMajor",
+        "helpers:pinGitHubActionDigests"
+    ],
+    "labels": [
+        "dependencies"
+    ],
+    "platformAutomerge": true,
+    "automergeType": "pr",
+    "prHourlyLimit": 5,
+    "prConcurrentLimit": 10,
+    "customManagers": [
+        {
+            "customType": "regex",
+            "description": "pnpm version in packageManager field",
+            "managerFilePatterns": [
+                "/^package\\.json$/"
+            ],
+            "matchStrings": [
+                "\\\"packageManager\\\":\\s*\\\"pnpm@(?<currentValue>[^\\\"]+)\\\""
+            ],
+            "depNameTemplate": "pnpm",
+            "datasourceTemplate": "npm"
+        },
+        {
+            "customType": "regex",
+            "description": "pnpm version in devcontainer Dockerfile",
+            "managerFilePatterns": [
+                "/^\\.devcontainer\\/Dockerfile$/"
+            ],
+            "matchStrings": [
+                "corepack prepare pnpm@(?<currentValue>[^\\s]+) --activate"
+            ],
+            "depNameTemplate": "pnpm",
+            "datasourceTemplate": "npm"
+        },
+        {
+            "customType": "regex",
+            "description": "Node.js version in CI workflow",
+            "managerFilePatterns": [
+                "/^\\.github\\/workflows\\/ci\\.yml$/"
+            ],
+            "matchStrings": [
+                "node-version:\\s*'(?<currentValue>\\d+\\.\\d+\\.\\d+)'"
+            ],
+            "depNameTemplate": "node",
+            "datasourceTemplate": "node-version",
+            "versioningTemplate": "node"
+        }
+    ],
+    "packageRules": [
+        {
+            "description": "Group pnpm version updates across package metadata and devcontainer",
+            "groupName": "pnpm",
+            "groupSlug": "pnpm",
+            "matchPackageNames": [
+                "pnpm"
+            ],
+            "matchManagers": [
+                "custom.regex"
+            ]
+        },
+        {
+            "description": "Group Node.js version updates in CI workflows",
+            "groupName": "Node.js",
+            "groupSlug": "nodejs",
+            "matchPackageNames": [
+                "node"
+            ],
+            "matchManagers": [
+                "custom.regex"
+            ]
+        },
+        {
+            "description": "Auto-merge patch updates",
+            "matchUpdateTypes": [
+                "patch",
+                "pin",
+                "digest"
+            ],
+            "automerge": true
+        },
+        {
+            "description": "Group GitHub Actions updates",
+            "matchManagers": [
+                "github-actions"
+            ],
+            "groupName": "GitHub Actions",
+            "groupSlug": "github-actions"
+        },
+        {
+            "description": "Group Docker updates",
+            "matchManagers": [
+                "dockerfile"
+            ],
+            "groupName": "Docker",
+            "groupSlug": "docker"
+        },
+        {
+            "description": "Group npm workspace updates",
+            "matchManagers": [
+                "npm"
+            ],
+            "groupName": "JavaScript workspace",
+            "groupSlug": "javascript-workspace"
+        },
+        {
+            "description": "Require approval for major updates",
+            "matchUpdateTypes": [
+                "major"
+            ],
+            "automerge": false,
+            "labels": [
+                "dependencies",
+                "major"
+            ]
+        }
+    ],
+    "npm": {
+        "enabled": true
+    },
+    "dockerfile": {
+        "enabled": true
+    },
+    "github-actions": {
+        "enabled": true
+    },
+    "vulnerabilityAlerts": {
+        "enabled": true,
+        "labels": [
+            "security"
+        ]
+    },
+    "schedule": [
+        "before 6am on monday"
+    ]
+}

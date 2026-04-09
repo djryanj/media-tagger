@@ -1,0 +1,21 @@
+name: media-tagger
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: media-tagger:local
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+      NODE_ENV: production
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped

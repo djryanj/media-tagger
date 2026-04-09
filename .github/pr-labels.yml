@@ -1,0 +1,119 @@
+# Conventional Commit Type Labels
+feat:
+  - head-branch: ["^feat/", "feature/"]
+  - title: ['^feat(\(.+\))?:', '^feature(\(.+\))?:']
+
+fix:
+  - head-branch: ["^fix/", "^bugfix/", "^hotfix/"]
+  - title: ['^fix(\(.+\))?:', '^bugfix(\(.+\))?:']
+
+docs:
+  - head-branch: ["^docs/"]
+  - title: ['^docs(\(.+\))?:']
+  - changed-files:
+      - any-glob-to-any-file: ["**/*.md", "docs/**/*"]
+
+style:
+  - head-branch: ["^style/"]
+  - title: ['^style(\(.+\))?:']
+
+refactor:
+  - head-branch: ["^refactor/"]
+  - title: ['^refactor(\(.+\))?:']
+
+perf:
+  - head-branch: ["^perf/"]
+  - title: ['^perf(\(.+\))?:', '^performance(\(.+\))?:']
+
+test:
+  - head-branch: ["^test/"]
+  - title: ['^test(\(.+\))?:']
+  - changed-files:
+      - any-glob-to-any-file:
+          [
+            "**/*.test.ts",
+            "**/*.test.tsx",
+            "**/*.spec.ts",
+            "**/*.spec.tsx",
+            "tests/**/*",
+          ]
+
+build:
+  - head-branch: ["^build/"]
+  - title: ['^build(\(.+\))?:']
+  - changed-files:
+      - any-glob-to-any-file:
+          [
+            "Dockerfile",
+            ".dockerignore",
+            ".devcontainer/**/*",
+            "Makefile",
+            "package.json",
+            "pnpm-lock.yaml",
+            "pnpm-workspace.yaml",
+            ".npmrc",
+            "**/tsconfig*.json",
+            "**/vite.config.*",
+          ]
+
+ci:
+  - head-branch: ["^ci/"]
+  - title: ['^ci(\(.+\))?:']
+  - changed-files:
+      - any-glob-to-any-file: [".github/**/*"]
+
+chore:
+  - head-branch: ["^chore/"]
+  - title: ['^chore(\(.+\))?:']
+
+# Component Labels
+web:
+  - changed-files:
+      - any-glob-to-any-file: ["apps/web/**/*", "**/*.css", "**/*.tsx"]
+
+api:
+  - changed-files:
+      - any-glob-to-any-file: ["apps/api/**/*"]
+
+tooling:
+  - changed-files:
+      - any-glob-to-any-file:
+          [
+            "Makefile",
+            "package.json",
+            "pnpm-lock.yaml",
+            "pnpm-workspace.yaml",
+            ".npmrc",
+            "tsconfig.base.json",
+            ".devcontainer/**/*",
+          ]
+
+docker:
+  - changed-files:
+      - any-glob-to-any-file:
+          [
+            "Dockerfile",
+            "docker-compose.yml",
+            "compose.yml",
+            ".dockerignore",
+            ".devcontainer/**/*",
+          ]
+
+security:
+  - title: ['^sec(\(.+\))?:', '^security(\(.+\))?:']
+  - head-branch: ["^security/"]
+
+breaking-change:
+  - title: ["BREAKING CHANGE:", "!:"]
+  - body: ["BREAKING CHANGE:"]
+
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file:
+          [
+            "package.json",
+            "pnpm-lock.yaml",
+            "pnpm-workspace.yaml",
+            ".github/dependabot.yml",
+            ".github/renovate.json",
+          ]

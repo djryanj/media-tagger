@@ -1,0 +1,145 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  api:
+    name: API Verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: "24.14.1"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run API verification
+        run: make ci-api
+
+  web:
+    name: Web Verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: "24.14.1"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run web verification
+        run: make ci-web
+
+  e2e:
+    name: Web E2E
+    runs-on: ubuntu-latest
+    needs: [api, web]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: "24.14.1"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install media tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg libimage-exiftool-perl
+
+      - name: Install Playwright Chromium
+        run: pnpm --filter @media-tagger/web exec playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        run: make test-e2e-web
+
+  docker:
+    name: Publish Docker Image
+    needs: [api, web, e2e]
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      push: true
+      dockerfile: Dockerfile
+
+  github-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: docker
+    steps:
+      - name: Create release
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          IMAGE_DIGEST: ${{ needs.docker.outputs.digest }}
+          IMAGE_TAGS: ${{ needs.docker.outputs.tags }}
+        with:
+          script: |
+            const tagName = context.ref.replace("refs/tags/", "");
+            const imageDigest = process.env.IMAGE_DIGEST ?? "";
+            const imageTags = (process.env.IMAGE_TAGS ?? "")
+              .split(/\n+/)
+              .map((value) => value.trim())
+              .filter(Boolean);
+            const publishedTags = imageTags.length > 0
+              ? imageTags.map((value) => `- \`${value}\``).join("\n")
+              : "- No tags reported by the build workflow.";
+            const body = [
+              "## Container Image",
+              "",
+              imageDigest ? `Digest: \`${imageDigest}\`` : "Digest: unavailable",
+              "",
+              "Published tags:",
+              publishedTags,
+            ].join("\n");
+
+            await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tagName,
+              name: tagName,
+              body,
+              generate_release_notes: true,
+              draft: false,
+              prerelease: tagName.includes("-"),
+            });
