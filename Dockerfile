@@ -21,7 +21,7 @@ FROM deps AS build
 
 COPY apps ./apps
 
-RUN pnpm build && pnpm prune --prod
+RUN CI=true pnpm build && CI=true pnpm prune --prod
 
 FROM node:24-bookworm-slim AS runtime
 
