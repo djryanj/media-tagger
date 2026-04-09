@@ -12,7 +12,7 @@ RELEASE_PACKAGE_FILES := package.json apps/api/package.json apps/web/package.jso
 
 .DEFAULT_GOAL := $(DEFAULT_GOAL)
 
-.PHONY: help doctor doctor-tools install install-playwright setup reset-deps dev dev-api dev-web build build-api build-web docker-build lint lint-api lint-web typecheck typecheck-api typecheck-web test test-api test-web test-e2e-web show-report-e2e-web preview-web start-api ci ci-api ci-web _check-version prepare-release tag-release clean
+.PHONY: help doctor doctor-tools install install-playwright setup reset-deps dev dev-api dev-web build build-api build-web docker-build lint lint-api lint-web typecheck typecheck-api typecheck-web test test-api test-web test-e2e-web show-report-e2e-web preview-web start-api ci ci-api ci-web _check-version prepare-release-check prepare-release tag-release clean
 
 help:
 	@printf "Targets:\n"
@@ -43,6 +43,7 @@ help:
 	@printf "  make ci           Run the local CI-style verification set\n"
 	@printf "  make ci-api       Run lint, typecheck, test, and build for the API package\n"
 	@printf "  make ci-web       Run lint, typecheck, test, and build for the web package\n"
+	@printf "  make prepare-release-check VERSION=vX.Y.Z Dry-run the release bash commands against temp copies of the current files\n"
 	@printf "  make prepare-release VERSION=vX.Y.Z Create a release branch, bump versions, and stamp the changelog\n"
 	@printf "  make tag-release VERSION=vX.Y.Z     Create and push the annotated release tag from main\n"
 	@printf "  make clean        Remove generated build and test output\n"
@@ -178,18 +179,31 @@ prepare-release: _check-version
 		echo "Error: release/$(VERSION_TAG) already exists on origin."; \
 		exit 1; \
 	fi
-	@echo "--- Restoring release files from HEAD ----------------------------"
-	@git restore --source=HEAD -- $(RELEASE_PACKAGE_FILES) CHANGELOG.md
 	@echo "--- Validating release files -------------------------------------"
-	@node scripts/release/stamp-changelog.mjs --check "$(VERSION_NUM)" CHANGELOG.md
+	@escaped_version=$$(printf '%s' '$(VERSION_NUM)' | sed 's/\./\\./g'); \
+	grep -Eq "^## \[$$escaped_version\] - Unreleased$$" CHANGELOG.md || { \
+		echo "Error: CHANGELOG.md does not contain \"## [$(VERSION_NUM)] - Unreleased\"."; \
+		exit 1; \
+	}
 	@echo "--- Creating branch release/$(VERSION_TAG) ------------------------"
 	@git checkout -b release/$(VERSION_TAG)
 	@echo "--- Bumping workspace package versions to $(VERSION_NUM) ---------"
-	@npm pkg set version="$(VERSION_NUM)"
-	@npm --prefix apps/api pkg set version="$(VERSION_NUM)"
-	@npm --prefix apps/web pkg set version="$(VERSION_NUM)"
+	@for file in $(RELEASE_PACKAGE_FILES); do \
+		current_version=$$(sed -nE 's/^[[:space:]]*"version":[[:space:]]*"([^"]+)".*$$/\1/p' "$$file" | head -n 1); \
+		[ -n "$$current_version" ] || { \
+			echo "Error: $$file does not contain a version field."; \
+			exit 1; \
+		}; \
+		sed -i -E "0,/^([[:space:]]*\"version\":[[:space:]]*\")[^\"]+(\"[[:space:]]*,?[[:space:]]*)$$/s//\1$(VERSION_NUM)\2/" "$$file"; \
+	done
 	@echo "--- Stamping CHANGELOG.md -----------------------------------------"
-	@node scripts/release/stamp-changelog.mjs "$(VERSION_NUM)" CHANGELOG.md
+	@escaped_version=$$(printf '%s' '$(VERSION_NUM)' | sed 's/\./\\./g'); \
+	today=$$(date -u '+%Y-%m-%d'); \
+	sed -i "s/^## \[$$escaped_version\] - Unreleased$$/## [$(VERSION_NUM)] - $$today/" CHANGELOG.md; \
+	grep -Eq "^## \[$$escaped_version\] - $$today$$" CHANGELOG.md || { \
+		echo "Error: Failed to stamp CHANGELOG.md for $(VERSION_NUM)."; \
+		exit 1; \
+	}
 	@echo "--- Committing release preparation --------------------------------"
 	@git add $(RELEASE_PACKAGE_FILES) CHANGELOG.md
 	@git commit -m "chore(release): prepare $(VERSION_TAG)"
@@ -201,6 +215,55 @@ prepare-release: _check-version
 	@echo "  2. Merge the PR"
 	@echo "  3. git checkout main && git pull --ff-only origin main"
 	@echo "  4. make tag-release VERSION=$(VERSION_TAG)"
+
+prepare-release-check: _check-version
+	@echo "--- Ensuring current branch is main -------------------------------"
+	@[ "$$(git rev-parse --abbrev-ref HEAD)" = "main" ] || { \
+		echo "Error: prepare-release-check must be run from the main branch."; \
+		exit 1; \
+	}
+	@echo "--- Fetching remote main metadata ---------------------------------"
+	@git fetch origin main --quiet
+	@echo "--- Ensuring release branch does not already exist ---------------"
+	@if git show-ref --verify --quiet refs/heads/release/$(VERSION_TAG); then \
+		echo "Error: release/$(VERSION_TAG) already exists locally."; \
+		exit 1; \
+	fi
+	@if git ls-remote --exit-code --heads origin release/$(VERSION_TAG) >/dev/null 2>&1; then \
+		echo "Error: release/$(VERSION_TAG) already exists on origin."; \
+		exit 1; \
+	fi
+	@echo "--- Exercising release bash commands on temp file copies ---------"
+	@set -e; \
+	temp_dir="$$(mktemp -d)"; \
+	trap 'rm -rf "$$temp_dir"' EXIT; \
+	mkdir -p "$$temp_dir/apps/api" "$$temp_dir/apps/web"; \
+	cp package.json "$$temp_dir/package.json"; \
+	cp apps/api/package.json "$$temp_dir/apps/api/package.json"; \
+	cp apps/web/package.json "$$temp_dir/apps/web/package.json"; \
+	cp CHANGELOG.md "$$temp_dir/CHANGELOG.md"; \
+	for file in \
+		"$$temp_dir/package.json" \
+		"$$temp_dir/apps/api/package.json" \
+		"$$temp_dir/apps/web/package.json"; do \
+		current_version=$$(sed -nE 's/^[[:space:]]*"version":[[:space:]]*"([^"]+)".*$$/\1/p' "$$file" | head -n 1); \
+		[ -n "$$current_version" ] || { \
+			echo "Error: $$file does not contain a version field."; \
+			exit 1; \
+		}; \
+		sed -i -E "0,/^([[:space:]]*\"version\":[[:space:]]*\")[^\"]+(\"[[:space:]]*,?[[:space:]]*)$$/s//\1$(VERSION_NUM)\2/" "$$file"; \
+	done; \
+	escaped_version=$$(printf '%s' '$(VERSION_NUM)' | sed 's/\./\\./g'); \
+	today=$$(date -u '+%Y-%m-%d'); \
+	grep -Eq "^## \[$$escaped_version\] - Unreleased$$" "$$temp_dir/CHANGELOG.md" || { \
+		echo "Error: $$temp_dir/CHANGELOG.md does not contain the unreleased entry for $(VERSION_NUM)."; \
+		exit 1; \
+	}; \
+	sed -i "s/^## \[$$escaped_version\] - Unreleased$$/## [$(VERSION_NUM)] - $$today/" "$$temp_dir/CHANGELOG.md"; \
+	echo "Verified package version:"; \
+	grep -m1 '"version"' "$$temp_dir/package.json"; \
+	echo "Verified changelog header:"; \
+	grep -m1 '^## \[' "$$temp_dir/CHANGELOG.md"
 
 tag-release: _check-version
 	@echo "--- Ensuring current branch is main -------------------------------"
