@@ -1,8 +1,12 @@
 # Media Tagger
 
-Media Tagger is a mobile-first web app for writing a single canonical metadata payload into still images, GIFs, and videos.
+Media Tagger is a mobile-first web app for writing a single specific metadata payload into still images, GIFs, and videos for the purpose of pre-seeding the image with tags that its sister application, [Media Viewer](https://github.com/djryanj/media-viewer) can consume. One set of tags can be applied to up to 10 selected files in one submission.
 
-One set of tags can be applied to up to 10 selected files in one submission.
+The reason you might want this is because [Media Viewer](https://github.com/djryanj/media-viewer) does not have (and will not have) the ability to upload media to it. So if your workflow sometimes looks like this:
+
+`Download Media On Mobile Device -> Sync to Media Viewer` (where the `->` might even have multiple intermediate steps and be largely asynchonous and even take hours depending on sync cycles), you might want to pre-seed the downloaded media with tags that could easily be forgotten before they show up in Media Viewer. This simple app allows you to make sure those tags are applied right away.
+
+## Workflow
 
 The core workflow is intentionally narrow:
 
@@ -31,17 +35,6 @@ The current supported set for metadata writing is JPG, JPEG, PNG, WebP, GIF, MP4
 - `Makefile` exposes common install, development, and verification workflows.
 - `apps/api/` contains the Fastify backend workspace package.
 - `apps/web/` contains the React and Vite frontend workspace package.
-
-## Development Principles
-
-- Treat the rendered payload string as the canonical metadata value.
-- Keep format-specific field mapping centralized in backend code.
-- Detect the actual uploaded media type before writing metadata and rename the download if the extension must be corrected without transcoding.
-- Accept uploads up to `MEDIA_TAGGER_MAX_UPLOAD_BYTES`, defaulting to `1073741824` bytes (1 GiB).
-- Buffer smaller uploads in memory and stage larger uploads on disk, with the in-memory threshold controlled by `MEDIA_TAGGER_IN_MEMORY_UPLOAD_LIMIT_BYTES` and defaulting to `536870912` bytes (512 MiB).
-- Verify every metadata write by reading the result back in automated tests.
-- Preserve parity across local development, the devcontainer, Docker, and CI.
-- Keep the initial UI to a single, fast mobile-first screen.
 
 ## Getting Started
 

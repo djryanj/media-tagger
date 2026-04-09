@@ -18,7 +18,7 @@ spec:
               service:
                 name: media-tagger
                 port:
-                  number: 80
+                  number: 3000
   tls:
     - hosts:
         - media-tagger.example.com

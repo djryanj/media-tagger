@@ -6,7 +6,10 @@ metadata:
   labels:
     app.kubernetes.io/name: media-tagger
 spec:
+  revisionHistoryLimit: 3
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: media-tagger
@@ -15,54 +18,64 @@ spec:
       labels:
         app.kubernetes.io/name: media-tagger
     spec:
+      automountServiceAccountToken: false
       containers:
         - name: media-tagger
           image: ghcr.io/djryanj/media-tagger:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 3000
+              protocol: TCP
           env:
             - name: NODE_ENV
               value: production
             - name: PORT
               value: "3000"
             - name: MEDIA_TAGGER_MAX_UPLOAD_BYTES
-              value: "1073741824"
+              value: "1073741824" # 1 GiB
             - name: MEDIA_TAGGER_IN_MEMORY_UPLOAD_LIMIT_BYTES
-              value: "536870912"
+              value: "536870912" # 512 MiB
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "128Mi"
+            limits:
+              memory: "1024Mi"
           readinessProbe:
             httpGet:
               path: /health
               port: http
             initialDelaySeconds: 5
             periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
           livenessProbe:
             httpGet:
               path: /health
               port: http
             initialDelaySeconds: 15
             periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
           securityContext:
             allowPrivilegeEscalation: false
+            privileged: false
             capabilities:
               drop:
                 - ALL
             readOnlyRootFilesystem: true
-            runAsNonRoot: true
             runAsUser: 1000
             runAsGroup: 1000
-            seccompProfile:
-              type: RuntimeDefault
           volumeMounts:
-            - name: temp
+            - name: tmp
               mountPath: /tmp
-          resources:
-            requests:
-              cpu: 100m
-              memory: 1Gi
-            limits:
-              memory: 2Gi
       volumes:
-        - name: temp
+        - name: tmp
           emptyDir: {}
+      restartPolicy: Always
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
