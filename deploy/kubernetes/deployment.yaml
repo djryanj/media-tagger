@@ -27,6 +27,10 @@ spec:
               value: production
             - name: PORT
               value: "3000"
+            - name: MEDIA_TAGGER_MAX_UPLOAD_BYTES
+              value: "1073741824"
+            - name: MEDIA_TAGGER_IN_MEMORY_UPLOAD_LIMIT_BYTES
+              value: "536870912"
           readinessProbe:
             httpGet:
               path: /health
@@ -53,6 +57,12 @@ spec:
           volumeMounts:
             - name: temp
               mountPath: /tmp
+          resources:
+            requests:
+              cpu: 100m
+              memory: 1Gi
+            limits:
+              memory: 2Gi
       volumes:
         - name: temp
           emptyDir: {}

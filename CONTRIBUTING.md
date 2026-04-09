@@ -15,10 +15,11 @@ Favor small, focused changes that keep the upload-to-download workflow reliable.
 
 ## Development Expectations
 
-- Keep the payload contract exact: `tags:<csv list of tags>` with an optional trailing `;`.
+- Keep the payload contract exact: `tags:<csv list of tags>` unless the user types extra literal characters into the tags input.
 - Prefer root-cause fixes over one-off exceptions.
 - Add or update tests whenever behavior changes.
 - Keep documentation aligned with code and tooling changes.
+- When upload buffering behavior changes, update the RAM and `/tmp` sizing guidance as well as the server/UI config flow.
 - Avoid widening the product scope before the core workflow is complete.
 
 ## Release Workflow

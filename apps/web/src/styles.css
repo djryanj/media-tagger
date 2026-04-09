@@ -77,9 +77,9 @@ h1 {
   background: #ffffff;
 }
 
-.toggle-card {
-  grid-template-columns: 1fr auto;
-  align-items: center;
+.warning-card {
+  border-color: #d3b37a;
+  background: #fff7ea;
 }
 
 .field-label {
@@ -163,12 +163,6 @@ h1 {
   resize: vertical;
 }
 
-.toggle-input {
-  width: 1.4rem;
-  height: 1.4rem;
-  accent-color: #555;
-}
-
 .submit-button {
   min-height: 52px;
   border: 1px solid #b6b6b6;
@@ -179,9 +173,70 @@ h1 {
   background: #e7e7e7;
 }
 
+.secondary-button {
+  min-height: 44px;
+  border: 1px solid #b6b6b6;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 600;
+  color: #222;
+  background: #efefef;
+}
+
 .submit-button:disabled {
   cursor: wait;
   opacity: 0.72;
+}
+
+.download-results {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid #d6d6d6;
+}
+
+.download-results-header {
+  display: grid;
+  gap: 6px;
+}
+
+.download-results-header h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.download-result-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.download-result-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid #d6d6d6;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.download-result-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.download-result-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.92rem;
+  color: #666;
 }
 
 .status-strip {
@@ -197,6 +252,10 @@ h1 {
   color: #a23b23;
 }
 
+.status-warning {
+  color: #7d5b12;
+}
+
 @media (min-width: 720px) {
   .app-shell {
     padding: 28px;
@@ -205,5 +264,11 @@ h1 {
 
   .app-panel {
     padding: 24px;
+  }
+}
+
+@media (max-width: 420px) {
+  .download-result-item {
+    grid-template-columns: 1fr;
   }
 }

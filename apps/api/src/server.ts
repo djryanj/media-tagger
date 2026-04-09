@@ -1,5 +1,7 @@
-import { existsSync } from "node:fs";
+import { createReadStream, createWriteStream, existsSync } from "node:fs";
+import { rm } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
 
 import cors from "@fastify/cors";
@@ -7,20 +9,27 @@ import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
 import Fastify, { FastifyReply, FastifyRequest } from "fastify";
 
+import { getServerRuntimeConfig } from "./config.js";
 import { UnsupportedMediaError } from "./media.js";
-import { MetadataWriteError, writeTaggedMedia } from "./metadata.js";
 import {
-  normalizeTags,
-  parseTerminateWithSemicolon,
-  renderPayload,
-} from "./tags.js";
+  MetadataWriteError,
+  writeTaggedMedia,
+  writeTaggedMediaFromBuffer,
+} from "./metadata.js";
+import { normalizeTags, renderPayload } from "./tags.js";
+import {
+  consumeUploadedFile,
+  parseDeclaredFileSize,
+} from "./upload.js";
 
 const SERVER_HOST = "0.0.0.0";
 const MODULE_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_WEB_DIST_DIRECTORY = resolve(MODULE_DIRECTORY, "../../web/dist");
 
 export function buildServer() {
+  const runtimeConfig = getServerRuntimeConfig();
   const app = Fastify({
+    bodyLimit: runtimeConfig.maxUploadBytes,
     logger: true,
   });
   const webDistDirectory =
@@ -29,12 +38,16 @@ export function buildServer() {
 
   void app.register(cors, {
     origin: true,
+    exposedHeaders: [
+      "content-disposition",
+      "x-media-tagger-file-resolution",
+    ],
   });
 
   void app.register(multipart, {
     limits: {
       files: 1,
-      fileSize: 250 * 1024 * 1024,
+      fileSize: runtimeConfig.maxUploadBytes,
     },
   });
 
@@ -47,42 +60,56 @@ export function buildServer() {
 
   app.get("/health", async () => ({ ok: true }));
   app.get("/api/health", async () => ({ ok: true }));
+  app.get("/api/config", async () => runtimeConfig);
 
   app.post(
     "/api/media/tag",
     async (request: FastifyRequest, reply: FastifyReply) => {
       const parts = request.parts();
-      let fileBuffer: Buffer | null = null;
       let filename = "tagged-media";
+      let declaredFileSize: number | null = null;
       let mimetype = "application/octet-stream";
       let rawTags = "";
-      let terminateWithSemicolon = false;
+      let upload:
+        | Awaited<ReturnType<typeof consumeUploadedFile>>
+        | null = null;
 
-      for await (const part of parts) {
-        if (part.type === "file") {
-          if (part.fieldname !== "file") {
-            await part.toBuffer();
+      try {
+        for await (const part of parts) {
+          if (part.type === "file") {
+            if (part.fieldname !== "file") {
+              await pipeline(part.file, createWriteStream("/dev/null"));
+              continue;
+            }
+
+            filename = part.filename ?? filename;
+            mimetype = part.mimetype;
+            upload = await consumeUploadedFile({
+              declaredFileSize,
+              filename,
+              fileStream: part.file,
+              inMemoryUploadLimitBytes: runtimeConfig.inMemoryUploadLimitBytes,
+            });
             continue;
           }
 
-          fileBuffer = await part.toBuffer();
-          filename = part.filename ?? filename;
-          mimetype = part.mimetype;
-          continue;
+          if (part.fieldname === "tags") {
+            rawTags = String(part.value ?? "");
+          }
+
+          if (part.fieldname === "fileSize") {
+            declaredFileSize = parseDeclaredFileSize(String(part.value ?? ""));
+          }
+        }
+      } catch (error) {
+        if (upload?.inputPath) {
+          await rm(dirname(upload.inputPath), { force: true, recursive: true });
         }
 
-        if (part.fieldname === "tags") {
-          rawTags = String(part.value ?? "");
-        }
-
-        if (part.fieldname === "terminateWithSemicolon") {
-          terminateWithSemicolon = parseTerminateWithSemicolon(
-            String(part.value ?? ""),
-          );
-        }
+        throw error;
       }
 
-      if (!fileBuffer || fileBuffer.length === 0) {
+      if (!upload || (!upload.inputPath && !upload.buffer)) {
         return reply.code(400).send({ error: "A media file is required." });
       }
 
@@ -92,15 +119,95 @@ export function buildServer() {
         return reply.code(400).send({ error: "At least one tag is required." });
       }
 
-      const payload = renderPayload(tags, terminateWithSemicolon);
+      const payload = renderPayload(tags);
+
+      request.log.info(
+        {
+          actualFileSize: upload.actualFileSize,
+          declaredFileSize: upload.declaredFileSize,
+          declaredMimeType: mimetype,
+          filename,
+          inMemoryUploadLimitBytes: runtimeConfig.inMemoryUploadLimitBytes,
+          processingMode: upload.processingMode,
+          tagCount: tags.length,
+        },
+        "Received media tagging request.",
+      );
 
       try {
+        if (upload.processingMode === "memory") {
+          const taggedMedia = await writeTaggedMediaFromBuffer({
+            buffer: upload.buffer as Buffer,
+            filename,
+            mimetype,
+            payload,
+          });
+
+          if (taggedMedia.resolution.warning) {
+            request.log.warn(
+              {
+                ...taggedMedia.resolution,
+                outputContentType: taggedMedia.contentType,
+              },
+              "Resolved uploaded media type mismatch before writing metadata.",
+            );
+            reply.header(
+              "x-media-tagger-file-resolution",
+              taggedMedia.resolution.warning,
+            );
+          }
+
+          request.log.info(
+            {
+              declaredMimeType: mimetype,
+              detectedContentType: taggedMedia.resolution.detectedContentType,
+              detectedExtension: taggedMedia.resolution.detectedExtension,
+              filename,
+              outputFilename: taggedMedia.filename,
+            },
+            "Tagged media successfully.",
+          );
+
+          reply.header(
+            "content-disposition",
+            `attachment; filename="${taggedMedia.filename}"`,
+          );
+          reply.type(taggedMedia.contentType);
+
+          return reply.send(taggedMedia.buffer);
+        }
+
         const taggedMedia = await writeTaggedMedia({
-          buffer: fileBuffer,
           filename,
+          inputPath: upload.inputPath as string,
           mimetype,
           payload,
         });
+
+        if (taggedMedia.resolution.warning) {
+          request.log.warn(
+            {
+              ...taggedMedia.resolution,
+              outputContentType: taggedMedia.contentType,
+            },
+            "Resolved uploaded media type mismatch before writing metadata.",
+          );
+          reply.header(
+            "x-media-tagger-file-resolution",
+            taggedMedia.resolution.warning,
+          );
+        }
+
+        request.log.info(
+          {
+            declaredMimeType: mimetype,
+            detectedContentType: taggedMedia.resolution.detectedContentType,
+            detectedExtension: taggedMedia.resolution.detectedExtension,
+            filename,
+            outputFilename: taggedMedia.filename,
+          },
+          "Tagged media successfully.",
+        );
 
         reply.header(
           "content-disposition",
@@ -108,7 +215,21 @@ export function buildServer() {
         );
         reply.type(taggedMedia.contentType);
 
-        return reply.send(taggedMedia.buffer);
+        const cleanupTaggedMedia = async () => {
+          await rm(dirname(taggedMedia.outputPath), {
+            force: true,
+            recursive: true,
+          });
+        };
+
+        reply.raw.once("close", () => {
+          void cleanupTaggedMedia();
+        });
+        reply.raw.once("finish", () => {
+          void cleanupTaggedMedia();
+        });
+
+        return reply.send(createReadStream(taggedMedia.outputPath));
       } catch (error) {
         if (error instanceof UnsupportedMediaError) {
           return reply.code(415).send({ error: error.message });

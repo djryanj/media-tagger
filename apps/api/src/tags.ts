@@ -24,17 +24,6 @@ export function normalizeTags(input: string): string[] {
   return normalizedTags;
 }
 
-export function renderPayload(
-  tags: string[],
-  terminateWithSemicolon: boolean,
-): string {
-  return `tags:${tags.join(",")}${terminateWithSemicolon ? ";" : ""}`;
-}
-
-export function parseTerminateWithSemicolon(value: string | undefined): boolean {
-  if (!value) {
-    return false;
-  }
-
-  return ["true", "1", "yes", "on"].includes(value.toLocaleLowerCase());
+export function renderPayload(tags: string[]): string {
+  return `tags:${tags.join(",")}`;
 }

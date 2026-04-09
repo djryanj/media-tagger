@@ -4,7 +4,7 @@ Human and AI contributors should optimize for a clean, reliable core workflow ra
 
 ## Non-Negotiable Product Contract
 
-- The canonical payload format is `tags:<csv list of tags>` with an optional trailing `;`.
+- The canonical payload format is `tags:<csv list of tags>` unless the user intentionally types extra literal characters into the tags input.
 - The app supports a single workflow: upload up to 10 files, tag them once, rewrite metadata, and download each result individually.
 - The first UI should remain a single mobile-first screen.
 
@@ -19,6 +19,8 @@ Human and AI contributors should optimize for a clean, reliable core workflow ra
 
 - Solve root causes instead of format-specific hacks.
 - Centralize tag normalization, payload rendering, and metadata field mapping.
+- Resolve supported file-type mismatches by detecting the uploaded bytes, preserving the original media data, and renaming the download when the extension must change.
+- Keep the configured in-memory upload threshold and the documented RAM/tmp-storage guidance aligned across the API, UI, and deployment examples.
 - Verify metadata writes with readback in automated tests.
 - Keep parity between the devcontainer, Docker runtime, and CI.
 - Do not add product surface outside the upload-to-download workflow before the core path is reliable.

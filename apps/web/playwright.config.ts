@@ -1,5 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const mobileFirefoxUserAgent =
+  "Mozilla/5.0 (Android 14; Mobile; rv:137.0) Gecko/137.0 Firefox/137.0";
+
 export default defineConfig({
   testDir: "./e2e",
   outputDir: "./test-results",
@@ -21,6 +24,18 @@ export default defineConfig({
       name: "mobile-chromium",
       use: {
         ...devices["Pixel 7"],
+      },
+    },
+    {
+      name: "mobile-firefox",
+      use: {
+        browserName: "firefox",
+        hasTouch: true,
+        userAgent: mobileFirefoxUserAgent,
+        viewport: {
+          width: 412,
+          height: 915,
+        },
       },
     },
   ],
