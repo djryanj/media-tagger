@@ -9,6 +9,12 @@ import { getMediaSpec, sanitizeFilename } from "./media.js";
 
 const execFileAsync = promisify(execFile);
 
+type ExecFileFailure = Error & {
+  code?: number | string;
+  stderr?: Buffer | string;
+  stdout?: Buffer | string;
+};
+
 export class MetadataWriteError extends Error {}
 
 type WriteTaggedMediaInput = {
@@ -153,8 +159,59 @@ async function runExifTool(args: string[]): Promise<string> {
 
     return stdout;
   } catch (error) {
+    const recoverableOutput = getRecoverableExifToolOutput(error);
+
+    if (recoverableOutput !== null) {
+      return recoverableOutput;
+    }
+
     const message = error instanceof Error ? error.message : "Unknown exiftool failure";
 
     throw new MetadataWriteError(`Exiftool failed while processing the file. ${message}`);
   }
+}
+
+function getRecoverableExifToolOutput(error: unknown): string | null {
+  if (!(error instanceof Error)) {
+    return null;
+  }
+
+  const execFileFailure = error as ExecFileFailure;
+
+  if (!isRecoverableExifToolExitCode(execFileFailure.code)) {
+    return null;
+  }
+
+  const stderr = normalizeExecFileOutput(execFileFailure.stderr);
+
+  if (!containsOnlyMinorExifToolWarnings(stderr)) {
+    return null;
+  }
+
+  return normalizeExecFileOutput(execFileFailure.stdout);
+}
+
+function isRecoverableExifToolExitCode(code: ExecFileFailure["code"]): boolean {
+  return code === 1 || code === "1";
+}
+
+function containsOnlyMinorExifToolWarnings(stderr: string): boolean {
+  const lines = stderr
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  return lines.length > 0 && lines.every((line) => /^Error:\s+\[minor\]\s+/i.test(line));
+}
+
+function normalizeExecFileOutput(output: Buffer | string | undefined): string {
+  if (typeof output === "string") {
+    return output;
+  }
+
+  if (output instanceof Buffer) {
+    return output.toString("utf8");
+  }
+
+  return "";
 }
