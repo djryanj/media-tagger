@@ -10,6 +10,10 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 - Server build metadata reporting so the running version and git hash are exposed in startup logs, propagated through containerized builds, and shown in the web UI for easier deployment verification. [#11](https://github.com/djryanj/media-tagger/issues/11)
 
+### Fixed
+
+- MP4 and MOV tagging requests no longer fail when ExifTool reports a recoverable `[minor]` QuickTime metadata warning but the metadata write and readback verification still succeed. [#13](https://github.com/djryanj/media-tagger/issues/13)
+
 ## [0.2.0] - 2026-04-09
 
 ### Added
