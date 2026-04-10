@@ -5,7 +5,15 @@ import { runMediaRoundTrip } from "./helpers/media-roundtrip";
 test("round-trips MOV metadata", async ({ page }) => {
   await runMediaRoundTrip(page, {
     filename: "sample.mov",
-    readField: "QuickTime:Comment",
+    readFields: [
+      "ItemList:Comment",
+      "UserData:Comment",
+      "Keys:Comment",
+      "ItemList:Description",
+      "UserData:Description",
+      "Keys:Description",
+      "XMP-dc:Description",
+    ],
     ffmpegArgs: [
       "-f",
       "lavfi",

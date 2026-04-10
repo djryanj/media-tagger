@@ -13,7 +13,7 @@ const EXPECTED_PAYLOAD = "tags:forest,timelapse";
 
 export type MediaFixture = {
   filename: string;
-  readField: string;
+  readFields: string[];
   ffmpegArgs: string[];
 };
 
@@ -42,13 +42,7 @@ export async function runMediaRoundTrip(page: Page, fixture: MediaFixture) {
 
     await download.saveAs(downloadPath);
 
-    const { stdout } = await execFileAsync("exiftool", [
-      "-s3",
-      `-${fixture.readField}`,
-      downloadPath,
-    ]);
-
-    expect(stdout.trim()).toBe(EXPECTED_PAYLOAD);
+    await expectTaggedPayload(downloadPath, fixture.readFields);
     await expect(
       page.getByText(`Downloaded ${download.suggestedFilename()}.`),
     ).toBeVisible();
@@ -114,13 +108,7 @@ export async function runMultiFileRoundTrip(
 
         await download.saveAs(downloadPath);
 
-        const { stdout } = await execFileAsync("exiftool", [
-          "-s3",
-          `-${fixture.readField}`,
-          downloadPath,
-        ]);
-
-        expect(stdout.trim()).toBe(EXPECTED_PAYLOAD);
+        await expectTaggedPayload(downloadPath, fixture.readFields);
       }),
     );
 
@@ -145,4 +133,25 @@ export async function runMultiFileRoundTrip(
 
 async function createFixture(outputPath: string, ffmpegArgs: string[]) {
   await execFileAsync("ffmpeg", ["-y", ...ffmpegArgs, outputPath]);
+}
+
+async function expectTaggedPayload(
+  filePath: string,
+  readFields: string[],
+): Promise<void> {
+  for (const readField of readFields) {
+    const { stdout } = await execFileAsync("exiftool", [
+      "-s3",
+      `-${readField}`,
+      filePath,
+    ]);
+
+    if (stdout.trim() === EXPECTED_PAYLOAD) {
+      return;
+    }
+  }
+
+  throw new Error(
+    `Expected one of ${readFields.join(", ")} to equal ${EXPECTED_PAYLOAD}.`,
+  );
 }

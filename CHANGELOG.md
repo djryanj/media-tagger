@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project uses semantic version tags for releases.
 
+## [0.2.2] - Unreleased
+
+### Fixed
+
+- MP4 and MOV tagging now retry on a normalized copy of the video container when malformed metadata atoms prevent the first ExifTool write from persisting. The retry lets ExifTool create its preferred QuickTime and XMP comment or description tags, then verifies the payload across the concrete locations ExifTool may choose. [#13](https://github.com/djryanj/media-tagger/issues/13)
+
 ## [0.2.1] - 2026-04-10
 
 ### Added

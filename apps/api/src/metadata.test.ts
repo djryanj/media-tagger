@@ -38,6 +38,7 @@ describe("metadata writes", () => {
       stderr:
         "Error: [minor] Terminator found in Meta with 136 bytes remaining - /tmp/clip.mp4\n",
     });
+    queueExecFileSuccess("\n");
     queueExecFileSuccess(`${payload}\n`);
 
     await expect(
@@ -83,6 +84,47 @@ describe("metadata writes", () => {
 
     await rm(workingDirectory, { force: true, recursive: true });
   });
+
+  it("remuxes MP4 containers and retries when metadata does not persist", async () => {
+    const workingDirectory = await mkdtemp(join(tmpdir(), "metadata-write-"));
+    const inputPath = join(workingDirectory, "clip.mp4");
+    const remuxedPath = `${inputPath}.remuxed.mp4`;
+    const payload = "tags:cats,dogs";
+
+    await writeFile(inputPath, Buffer.from("video bytes"));
+
+    queueExecFileSuccess("mp4\nvideo/mp4\n");
+    queueExecFileFailure({
+      message: "Command failed: exiftool -overwrite_original ...",
+      stderr:
+        "Error: [minor] Terminator found in Meta with 136 bytes remaining - /tmp/clip.mp4\n",
+    });
+    queueExecFileSuccess("\n");
+    queueExecFileSuccess("\n");
+    queueExecFileSuccess("\n");
+    queueExecFileSuccess("\n");
+    queueExecFileSuccess("\n");
+    queueExecFileSuccess("\n");
+    queueExecFileSuccess("\n");
+    queueFfmpegRemuxSuccess(remuxedPath);
+    queueExecFileSuccess("");
+    queueExecFileSuccess(`${payload}\n`);
+
+    await expect(
+      writeTaggedMedia({
+        filename: "clip.mp4",
+        inputPath,
+        mimetype: "video/mp4",
+        payload,
+      }),
+    ).resolves.toMatchObject({
+      contentType: "video/mp4",
+      filename: "clip.mp4",
+      outputPath: inputPath,
+    });
+
+    await rm(workingDirectory, { force: true, recursive: true });
+  });
 });
 
 function queueExecFileSuccess(stdout: string, stderr = ""): void {
@@ -90,6 +132,22 @@ function queueExecFileSuccess(stdout: string, stderr = ""): void {
     stderr,
     stdout,
   });
+}
+
+function queueFfmpegRemuxSuccess(remuxedPath: string): void {
+  execFileAsyncMock.mockImplementationOnce(
+    async (file: string, args: string[]) => {
+      expect(file).toBe("ffmpeg");
+      expect(args.at(-1)).toBe(remuxedPath);
+
+      await writeFile(remuxedPath, Buffer.from("remuxed video bytes"));
+
+      return {
+        stderr: "",
+        stdout: "",
+      };
+    },
+  );
 }
 
 function queueExecFileFailure({
