@@ -15,6 +15,7 @@ describe("media validation", () => {
       contentType: "image/jpeg",
       extension: ".jpg",
       readField: "XMP-dc:Description",
+      readFields: ["XMP-dc:Description"],
     });
   });
 
@@ -42,6 +43,16 @@ describe("media validation", () => {
       contentType: "video/mp4",
       extension: ".mp4",
       safeFilename: "clip.mp4",
+      readFields: [
+        "ItemList:Comment",
+        "UserData:Comment",
+        "Keys:Comment",
+        "ItemList:Description",
+        "UserData:Description",
+        "Keys:Description",
+        "XMP-dc:Description",
+      ],
+      writeFields: ["Comment", "Description"],
       resolution: {
         filenameChanged: true,
         outputFilename: "clip.mp4",

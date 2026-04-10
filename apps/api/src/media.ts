@@ -7,7 +7,9 @@ type MediaSpec = {
   format: string;
   contentTypes: string[];
   writeField: string;
+  writeFields: string[];
   readField: string;
+  readFields: string[];
 };
 
 export type MediaResolution = {
@@ -27,49 +29,79 @@ const MEDIA_SPECS: Record<string, MediaSpec> = {
     contentTypes: ["image/gif"],
     format: "gif",
     writeField: "XMP-dc:Description",
+    writeFields: ["XMP-dc:Description"],
     readField: "XMP-dc:Description",
+    readFields: ["XMP-dc:Description"],
   },
   ".jpeg": {
     canonicalExtension: ".jpg",
     contentTypes: ["image/jpeg", "image/jpg", "image/pjpeg"],
     format: "jpeg",
     writeField: "XMP-dc:Description",
+    writeFields: ["XMP-dc:Description"],
     readField: "XMP-dc:Description",
+    readFields: ["XMP-dc:Description"],
   },
   ".jpg": {
     canonicalExtension: ".jpg",
     contentTypes: ["image/jpeg", "image/jpg", "image/pjpeg"],
     format: "jpeg",
     writeField: "XMP-dc:Description",
+    writeFields: ["XMP-dc:Description"],
     readField: "XMP-dc:Description",
+    readFields: ["XMP-dc:Description"],
   },
   ".mov": {
     canonicalExtension: ".mov",
     contentTypes: ["video/quicktime", "video/mov"],
     format: "mov",
-    writeField: "QuickTime:Comment",
-    readField: "QuickTime:Comment",
+    writeField: "Comment",
+    writeFields: ["Comment", "Description"],
+    readField: "ItemList:Comment",
+    readFields: [
+      "ItemList:Comment",
+      "UserData:Comment",
+      "Keys:Comment",
+      "ItemList:Description",
+      "UserData:Description",
+      "Keys:Description",
+      "XMP-dc:Description",
+    ],
   },
   ".mp4": {
     canonicalExtension: ".mp4",
     contentTypes: ["video/mp4", "application/mp4", "audio/mp4"],
     format: "mp4",
-    writeField: "QuickTime:Comment",
-    readField: "QuickTime:Comment",
+    writeField: "Comment",
+    writeFields: ["Comment", "Description"],
+    readField: "ItemList:Comment",
+    readFields: [
+      "ItemList:Comment",
+      "UserData:Comment",
+      "Keys:Comment",
+      "ItemList:Description",
+      "UserData:Description",
+      "Keys:Description",
+      "XMP-dc:Description",
+    ],
   },
   ".png": {
     canonicalExtension: ".png",
     contentTypes: ["image/png", "image/x-png"],
     format: "png",
     writeField: "XMP-dc:Description",
+    writeFields: ["XMP-dc:Description"],
     readField: "XMP-dc:Description",
+    readFields: ["XMP-dc:Description"],
   },
   ".webp": {
     canonicalExtension: ".webp",
     contentTypes: ["image/webp"],
     format: "webp",
     writeField: "XMP-dc:Description",
+    writeFields: ["XMP-dc:Description"],
     readField: "XMP-dc:Description",
+    readFields: ["XMP-dc:Description"],
   },
 };
 

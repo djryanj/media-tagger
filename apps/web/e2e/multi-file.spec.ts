@@ -6,7 +6,7 @@ test("round-trips metadata for multiple files with one tag set", async ({ page }
   await runMultiFileRoundTrip(page, [
     {
       filename: "sample-a.png",
-      readField: "XMP-dc:Description",
+      readFields: ["XMP-dc:Description"],
       ffmpegArgs: [
         "-f",
         "lavfi",
@@ -18,7 +18,7 @@ test("round-trips metadata for multiple files with one tag set", async ({ page }
     },
     {
       filename: "sample-b.webp",
-      readField: "XMP-dc:Description",
+      readFields: ["XMP-dc:Description"],
       ffmpegArgs: [
         "-f",
         "lavfi",

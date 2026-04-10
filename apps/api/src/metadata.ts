@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { readFile, rename, rm, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, extname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { promisify } from "node:util";
 import { mkdtemp } from "node:fs/promises";
@@ -75,21 +75,32 @@ export async function writeTaggedMedia({
       targetPath = resolvedTargetPath;
     }
 
-    await runExifTool([
-      "-overwrite_original",
-      "-api",
-      "LargeFileSupport=1",
-      `-${mediaSpec.writeField}=${payload}`,
+    let metadataVerification = await writeAndVerifyMetadata({
+      payload,
+      readFields: mediaSpec.readFields,
       targetPath,
-    ]);
+      writeFields: mediaSpec.writeFields,
+    });
 
-    const readbackValue = (
-      await runExifTool(["-s3", `-${mediaSpec.readField}`, targetPath])
-    ).trim();
+    if (
+      metadataVerification.matchingValue !== payload &&
+      shouldRetryWithRemux(mediaSpec.format)
+    ) {
+      await remuxVideoContainer(targetPath);
+
+      metadataVerification = await writeAndVerifyMetadata({
+        payload,
+        readFields: mediaSpec.readFields,
+        targetPath,
+        writeFields: mediaSpec.writeFields,
+      });
+    }
+
+    const readbackValue = metadataVerification.matchingValue ?? "";
 
     if (readbackValue !== payload) {
       throw new MetadataWriteError(
-        `Metadata verification failed after write. Expected "${payload}" but read back "${readbackValue}".`,
+        `Metadata verification failed after write. Expected "${payload}" but read back ${formatMetadataReadback(metadataVerification.values)}.`,
       );
     }
 
@@ -214,4 +225,108 @@ function normalizeExecFileOutput(output: Buffer | string | undefined): string {
   }
 
   return "";
+}
+
+async function writeAndVerifyMetadata({
+  payload,
+  readFields,
+  targetPath,
+  writeFields,
+}: {
+  payload: string;
+  readFields: string[];
+  targetPath: string;
+  writeFields: string[];
+}): Promise<{
+  matchingValue: string | null;
+  values: Array<{ field: string; value: string }>;
+}> {
+  await runExifTool([
+    "-overwrite_original",
+    "-api",
+    "LargeFileSupport=1",
+    ...writeFields.map((field) => `-${field}=${payload}`),
+    targetPath,
+  ]);
+
+  return readMetadataValues(readFields, targetPath, payload);
+}
+
+function shouldRetryWithRemux(format: string): boolean {
+  return format === "mov" || format === "mp4";
+}
+
+async function remuxVideoContainer(targetPath: string): Promise<void> {
+  const fileExtension = extname(targetPath);
+  const remuxedPath = `${targetPath}.remuxed${fileExtension}`;
+
+  try {
+    await runFfmpeg([
+      "-y",
+      "-i",
+      targetPath,
+      "-map",
+      "0",
+      "-c",
+      "copy",
+      remuxedPath,
+    ]);
+
+    await rm(targetPath, { force: true });
+    await rename(remuxedPath, targetPath);
+  } catch (error) {
+    await rm(remuxedPath, { force: true });
+    throw error;
+  }
+}
+
+async function runFfmpeg(args: string[]): Promise<void> {
+  try {
+    await execFileAsync("ffmpeg", args, {
+      encoding: "utf8",
+      maxBuffer: 10 * 1024 * 1024,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown ffmpeg failure";
+
+    throw new MetadataWriteError(`FFmpeg failed while normalizing the video container. ${message}`);
+  }
+}
+
+async function readMetadataValues(
+  fields: string[],
+  targetPath: string,
+  expectedValue?: string,
+): Promise<{
+  matchingValue: string | null;
+  values: Array<{ field: string; value: string }>;
+}> {
+  const values: Array<{ field: string; value: string }> = [];
+
+  for (const field of fields) {
+    const value = (await runExifTool(["-s3", `-${field}`, targetPath])).trim();
+
+    values.push({
+      field,
+      value,
+    });
+
+    if (expectedValue !== undefined && value === expectedValue) {
+      return {
+        matchingValue: value,
+        values,
+      };
+    }
+  }
+
+  return {
+    matchingValue: null,
+    values,
+  };
+}
+
+function formatMetadataReadback(values: Array<{ field: string; value: string }>): string {
+  return values
+    .map(({ field, value }) => `${field}="${value}"`)
+    .join(", ");
 }
