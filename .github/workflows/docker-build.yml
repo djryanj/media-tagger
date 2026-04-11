@@ -116,3 +116,10 @@ jobs:
           cache-to: type=gha,mode=max,scope=buildkit-${{ inputs.dockerfile }}-${{ github.ref_name }}
           provenance: false
           sbom: false
+
+      - name: Smoke test runtime image
+        if: ${{ !inputs.push }}
+        run: |
+          image_ref="$(printf '%s\n' "${{ steps.meta.outputs.tags }}" | head -n 1)"
+          test -n "$image_ref"
+          docker run --rm --entrypoint sh "$image_ref" -lc 'command -v ffmpeg >/dev/null && command -v exiftool >/dev/null'
