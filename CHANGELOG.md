@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project uses semantic version tags for releases.
 
+## [0.2.3] - Unreleased
+
+### Fixed
+
+- Production container images now install `ffmpeg` alongside ExifTool, and Docker validation smoke-tests the built image for both binaries so MP4 and MOV remux fallback does not fail at runtime.
+
 ## [0.2.2] - 2026-04-10
 
 ### Fixed

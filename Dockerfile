@@ -36,7 +36,7 @@ ENV MEDIA_TAGGER_GIT_HASH=${COMMIT}
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libimage-exiftool-perl tini \
+    && apt-get install -y --no-install-recommends ffmpeg libimage-exiftool-perl tini \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build --chown=node:node /workspace/node_modules ./node_modules
