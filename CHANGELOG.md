@@ -6,6 +6,11 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ## [0.2.3] - 2026-04-11
 
+
+### Changed
+
+- chore(deps): bump actions/setup-node from 6.3.0 to 6.4.0 ([#29](https://github.com/djryanj/media-tagger/pull/29))
+
 ### Fixed
 
 - Production container images now install `ffmpeg` alongside ExifTool, and Docker validation smoke-tests the built image for both binaries so MP4 and MOV remux fallback does not fail at runtime.
