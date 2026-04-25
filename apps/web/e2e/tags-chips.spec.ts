@@ -1,16 +1,12 @@
+import fs from 'fs';
 import { test, expect } from '@playwright/test';
-import path from 'path';
 
-// Helper to get a sample file path
-function getSampleFile(filename: string) {
-  return path.resolve(__dirname, '../e2e/fixtures/', filename);
-}
 
 test.describe('Tag chips and download UI', () => {
   test('shows confirmed tag chips after upload with pipe expansion', async ({ page }) => {
     await page.goto('/');
     // Upload a file
-    await page.setInputFiles('input[type="file"]', getSampleFile('sample.jpg'));
+    await page.setInputFiles('input[type="file"]', 'e2e/fixtures/sample.jpg');
     // Enter tags with pipe expansion
     await page.fill('textarea#media-tags', 'big|huge trees, small|large pots');
     // Chips should not be visible before upload
@@ -29,11 +25,12 @@ test.describe('Tag chips and download UI', () => {
     await page.goto('/');
     // Upload a file with a long name
     const longName = 'averyveryveryveryveryveryverylongfilenamefortestingpurposes.jpg';
-    // Upload a file with a long name using Playwright's object format
+    // Upload a file with a long name using a real image buffer
+    const imageBuffer = fs.readFileSync('e2e/fixtures/sample.jpg');
     await page.setInputFiles('input[type="file"]', {
       name: longName,
       mimeType: 'image/jpeg',
-      buffer: Buffer.from('test'),
+      buffer: imageBuffer,
     });
     await page.fill('textarea#media-tags', 'test');
     await page.click('button[type="submit"]');
