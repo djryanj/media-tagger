@@ -8,6 +8,7 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ### Changed
 
+- chore(deps): bump docker/build-push-action from 7.0.0 to 7.1.0 ([#23](https://github.com/djryanj/media-tagger/pull/23))
 - chore(deps): bump @fastify/static from 9.1.0 to 9.1.3 ([#24](https://github.com/djryanj/media-tagger/pull/24))
 - chore(deps): bump fastify from 5.8.4 to 5.8.5 ([#25](https://github.com/djryanj/media-tagger/pull/25))
 - chore(deps-dev): bump globals from 17.4.0 to 17.5.0 ([#26](https://github.com/djryanj/media-tagger/pull/26))
