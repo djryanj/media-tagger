@@ -8,6 +8,7 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ### Changed
 
+- chore(deps): bump fastify from 5.8.4 to 5.8.5 ([#25](https://github.com/djryanj/media-tagger/pull/25))
 - chore(deps-dev): bump globals from 17.4.0 to 17.5.0 ([#26](https://github.com/djryanj/media-tagger/pull/26))
 - chore(deps-dev): bump typescript-eslint from 8.58.1 to 8.59.0 ([#27](https://github.com/djryanj/media-tagger/pull/27))
 - chore(deps-dev): bump @types/node from 25.5.2 to 25.6.0 ([#28](https://github.com/djryanj/media-tagger/pull/28))
