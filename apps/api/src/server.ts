@@ -114,6 +114,7 @@ export function buildServer(
         return reply.code(400).send({ error: "A media file is required." });
       }
 
+
       const tags = normalizeTags(rawTags);
 
       if (tags.length === 0) {
@@ -121,6 +122,8 @@ export function buildServer(
       }
 
       const payload = renderPayload(tags);
+      // Add confirmed tags as a response header (JSON-encoded)
+      reply.header("x-media-tagger-confirmed-tags", JSON.stringify(tags));
 
       request.log.info(
         {

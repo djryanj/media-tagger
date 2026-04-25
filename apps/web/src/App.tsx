@@ -21,6 +21,7 @@ export default function App() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [tags, setTags] = useState("");
   const [status, setStatus] = useState<string>("Ready for upload.");
+  const [confirmedTags, setConfirmedTags] = useState<string[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [processedDownloads, setProcessedDownloads] = useState<
     ProcessedDownload[]
@@ -99,12 +100,14 @@ export default function App() {
     setErrorMessage(null);
     setProcessedDownloads([]);
     setWarningMessages([]);
+    setConfirmedTags([]);
 
     const failures: Array<{ file: string; message: string }> = [];
     const downloadedFilenames: string[] = [];
     const responseWarnings = new Set<string>();
 
     try {
+      let lastConfirmedTags: string[] = [];
       for (const [index, file] of selectedFiles.entries()) {
         setStatus(
           selectedFiles.length === 1
@@ -126,6 +129,18 @@ export default function App() {
           if (!response.ok) {
             const responseError = await readErrorMessage(response);
             throw new Error(responseError);
+          }
+
+          // Get confirmed tags from server response header (JSON-encoded)
+          const confirmedTagsHeader = response.headers.get(
+            "x-media-tagger-confirmed-tags",
+          );
+          if (confirmedTagsHeader) {
+            try {
+              lastConfirmedTags = JSON.parse(confirmedTagsHeader);
+            } catch {
+              // ignore JSON parse error
+            }
           }
 
           const blob = await response.blob();
@@ -178,6 +193,10 @@ export default function App() {
       }
 
       setWarningMessages(Array.from(responseWarnings));
+      // Only set confirmed tags after all uploads complete
+      if (lastConfirmedTags.length > 0) {
+        setConfirmedTags(lastConfirmedTags);
+      }
 
       if (downloadedFilenames.length === 0) {
         setStatus("Request failed.");
@@ -277,14 +296,14 @@ export default function App() {
           <label className="field-card" htmlFor="media-tags">
             <span className="field-label">Tags</span>
             <span className="field-help">
-              Separate tags with commas or new lines. Duplicate tags are
-              removed.
+              Separate tags with commas, new lines, or use <code>|</code> for
+              expansion. Duplicate tags are removed.
             </span>
             <textarea
               id="media-tags"
               className="tags-input"
               onChange={(event) => setTags(event.target.value)}
-              placeholder="forest, timelapse, sunrise"
+              placeholder="forest, big|huge trees, sunrise"
               rows={4}
               value={tags}
             />
@@ -308,6 +327,22 @@ export default function App() {
           >
             {isSubmitting ? "Writing metadata..." : "Tag and download files"}
           </button>
+
+          {/* Confirmed tags chips after upload */}
+          {confirmedTags.length > 0 && (
+            <div className="confirmed-tags-block">
+              <div className="confirmed-tags-label">
+                Tags applied by the server:
+              </div>
+              <div className="tag-chips-row" aria-label="Confirmed tag chips">
+                {confirmedTags.map((tag) => (
+                  <span className="tag-chip" key={tag}>
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </form>
 
         {processedDownloads.length > 0 ? (
@@ -325,10 +360,16 @@ export default function App() {
               {processedDownloads.map((download) => (
                 <li className="download-result-item" key={download.id}>
                   <div className="download-result-copy">
-                    <span className="field-value">
+                    <span
+                      className="field-value download-filename"
+                      title={download.sourceFilename}
+                    >
                       {download.sourceFilename}
                     </span>
-                    <span className="download-result-name">
+                    <span
+                      className="download-result-name"
+                      title={download.downloadFilename}
+                    >
                       Saves as {download.downloadFilename}
                     </span>
                   </div>

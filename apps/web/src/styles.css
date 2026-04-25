@@ -280,3 +280,64 @@ h1 {
     grid-template-columns: 1fr;
   }
 }
+
+/* Tag chips row */
+.tag-chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em;
+  margin-top: 0.5em;
+}
+
+.tag-chip {
+  display: inline-block;
+  background: #e0e7ef;
+  color: #1f2937;
+  border-radius: 999px;
+  padding: 0.25em 0.9em;
+  font-size: 0.98em;
+  font-weight: 500;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  border: 1px solid #b6c2d1;
+  user-select: none;
+}
+
+/* Confirmed tags block styling */
+.confirmed-tags-block {
+  margin-top: 1.2em;
+  padding: 1em 1.2em;
+  background: #f3f7fa;
+  border: 1px solid #b6c2d1;
+  border-radius: 10px;
+  display: grid;
+  gap: 0.5em;
+  max-width: 100%;
+}
+.confirmed-tags-label {
+  font-size: 0.98em;
+  font-weight: 600;
+  color: #2a3a4d;
+  margin-bottom: 0.2em;
+}
+
+/* Download filename ellipsis and wrapping */
+.download-filename,
+.download-result-name {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.download-result-copy {
+  min-width: 0;
+}
+
+@media (max-width: 600px) {
+  .download-filename,
+  .download-result-name {
+    font-size: 0.92em;
+    max-width: 90vw;
+  }
+}
