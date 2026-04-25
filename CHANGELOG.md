@@ -19,6 +19,15 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 - chore(deps-dev): bump @types/node from 25.5.2 to 25.6.0 ([#28](https://github.com/djryanj/media-tagger/pull/28))
 - chore(deps): bump actions/setup-node from 6.3.0 to 6.4.0 ([#29](https://github.com/djryanj/media-tagger/pull/29))
 
+### Added
+
+- Tag input now supports pipe `|` expansion: entering e.g. `big|huge trees` applies both `big trees` and `huge trees` as tags, and this works for any position or combination in the tag string. [#30](https://github.com/djryanj/media-tagger/issues/30)
+- The UI now displays a confirmation of the tags actually applied by the server, as chips below the submit button, only after upload completes. [#30](https://github.com/djryanj/media-tagger/issues/30)
+
+### Fixed
+
+- Download result filenames and "Saves as" fields now gracefully handle long names with ellipsis and tooltips, preventing layout breakage. [#30](https://github.com/djryanj/media-tagger/issues/30)
+
 ## [0.2.3] - 2026-04-11
 
 ### Fixed

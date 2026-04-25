@@ -279,4 +279,45 @@ describe("App", () => {
     expect(screen.getByText("Choose files no larger than 1 KB.")).toBeVisible();
     expect(getUploadCalls(fetchMock)).toHaveLength(0);
   });
+
+  // The chips are now only shown after upload, so this test is obsolete.
+
+  it("shows tag chips only after upload with confirmed tags", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.mocked(fetch);
+    const uploadedFile = new File(["png-data-1"], "sample-1.png", {
+      type: "image/png",
+    });
+    // Simulate server returning confirmed tags
+    fetchMock.mockResolvedValueOnce(buildConfigResponse());
+    fetchMock.mockResolvedValueOnce(
+      new Response(new Blob(["tagged-media-1"]), {
+        status: 200,
+        headers: {
+          "content-disposition": 'attachment; filename="tagged-sample-1.png"',
+          "content-type": "image/png",
+          "x-media-tagger-confirmed-tags": '["big trees","huge trees"]',
+        },
+      }),
+    );
+    render(<App />);
+    await screen.findByText("The server accepts files up to 1 GB.");
+    await user.upload(
+      screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+      uploadedFile,
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: /tags/i }),
+      "big|huge trees",
+    );
+    // Chips should not show before upload
+    expect(screen.queryByText("big trees")).toBeNull();
+    expect(screen.queryByText("huge trees")).toBeNull();
+    await user.click(
+      screen.getByRole("button", { name: "Tag and download files" }),
+    );
+    // Chips should show after upload
+    await waitFor(() => expect(screen.getByText("big trees")).toBeVisible());
+    expect(screen.getByText("huge trees")).toBeVisible();
+  });
 });
