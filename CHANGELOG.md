@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project uses semantic version tags for releases.
 
+## [0.2.4] - Unreleased
+
+### Changed
+
+- chore(deps): bump actions/setup-node from 6.3.0 to 6.4.0 ([#29](https://github.com/djryanj/media-tagger/pull/29))
+
 ## [0.2.3] - 2026-04-11
 
 ### Fixed
