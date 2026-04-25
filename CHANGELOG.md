@@ -8,6 +8,7 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ### Changed
 
+- chore(deps-dev): bump typescript-eslint from 8.58.1 to 8.59.0 ([#27](https://github.com/djryanj/media-tagger/pull/27))
 - chore(deps-dev): bump @types/node from 25.5.2 to 25.6.0 ([#28](https://github.com/djryanj/media-tagger/pull/28))
 - chore(deps): bump actions/setup-node from 6.3.0 to 6.4.0 ([#29](https://github.com/djryanj/media-tagger/pull/29))
 
