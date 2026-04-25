@@ -5,6 +5,8 @@ on:
     types:
       - opened
       - reopened
+  workflow_dispatch:
+  issue_comment:
 
 permissions:
   contents: write
@@ -19,23 +21,61 @@ jobs:
   update-changelog:
     name: Update Changelog
     if: >-
-      (github.event.pull_request.user.login == 'dependabot[bot]' ||
-      github.event.pull_request.user.login == 'github-actions[bot]' ||
-      github.event.pull_request.user.login == 'renovate[bot]') &&
-      github.event.pull_request.head.repo.full_name == github.repository
+      (
+        (
+          github.event_name == 'pull_request_target' &&
+          (github.event.pull_request.user.login == 'dependabot[bot]' ||
+           github.event.pull_request.user.login == 'github-actions[bot]' ||
+           github.event.pull_request.user.login == 'renovate[bot]') &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        )
+        ||
+        (
+          github.event_name == 'issue_comment' &&
+          github.event.issue.pull_request &&
+          contains(github.event.comment.body, '/auto-changelog')
+        )
+        ||
+        (
+          github.event_name == 'workflow_dispatch'
+        )
+      )
     runs-on: ubuntu-latest
     steps:
+      - name: Set PR variables (for comment or dispatch)
+        id: set-vars
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request_target" ]]; then
+            echo "pr_number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+            echo "pr_title=${{ github.event.pull_request.title }}" >> $GITHUB_OUTPUT
+            echo "pr_url=${{ github.event.pull_request.html_url }}" >> $GITHUB_OUTPUT
+            echo "pr_ref=${{ github.event.pull_request.head.ref }}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event_name }}" == "issue_comment" ]]; then
+            pr_api_url="${{ github.event.issue.pull_request.url }}"
+            pr_json=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "$pr_api_url")
+            echo "pr_number=$(echo $pr_json | jq -r .number)" >> $GITHUB_OUTPUT
+            echo "pr_title=$(echo $pr_json | jq -r .title)" >> $GITHUB_OUTPUT
+            echo "pr_url=$(echo $pr_json | jq -r .html_url)" >> $GITHUB_OUTPUT
+            echo "pr_ref=$(echo $pr_json | jq -r .head.ref)" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            # For manual dispatch, require inputs (not implemented here)
+            echo "pr_number=MANUAL" >> $GITHUB_OUTPUT
+            echo "pr_title=Manual Dispatch" >> $GITHUB_OUTPUT
+            echo "pr_url=" >> $GITHUB_OUTPUT
+            echo "pr_ref=main" >> $GITHUB_OUTPUT
+          fi
+
       - name: Checkout PR branch
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: ${{ steps.set-vars.outputs.pr_ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Update CHANGELOG.md
         env:
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
-          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_NUMBER: ${{ steps.set-vars.outputs.pr_number }}
+          PR_TITLE: ${{ steps.set-vars.outputs.pr_title }}
+          PR_URL: ${{ steps.set-vars.outputs.pr_url }}
         run: |
           set -euo pipefail
 
@@ -155,8 +195,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add CHANGELOG.md
-          git commit -m "docs: update CHANGELOG.md for PR #${{ github.event.pull_request.number }}"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+          git commit -m "docs: update CHANGELOG.md for PR #${{ steps.set-vars.outputs.pr_number }}"
+          git push origin HEAD:${{ steps.set-vars.outputs.pr_ref }}
 
       - name: Comment on PR
         if: steps.check_changes.outputs.changed == 'true'
