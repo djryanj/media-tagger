@@ -1,5 +1,4 @@
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
-import { normalizeTags } from "./normalizeTags";
 
 const ACCEPTED_FILE_TYPES = ".jpg,.jpeg,.png,.webp,.gif,.mp4,.mov";
 const MAX_FILES = 10;
@@ -139,7 +138,9 @@ export default function App() {
           if (confirmedTagsHeader) {
             try {
               lastConfirmedTags = JSON.parse(confirmedTagsHeader);
-            } catch {}
+            } catch {
+              // ignore JSON parse error
+            }
           }
 
           const blob = await response.blob();

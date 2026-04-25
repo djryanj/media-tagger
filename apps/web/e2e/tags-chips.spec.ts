@@ -10,8 +10,7 @@ test.describe('Tag chips and download UI', () => {
   test('shows confirmed tag chips after upload with pipe expansion', async ({ page }) => {
     await page.goto('/');
     // Upload a file
-    const filePath = getSampleFile('sample.jpg');
-    await page.setInputFiles('input[type="file"]', filePath);
+    await page.setInputFiles('input[type="file"]', getSampleFile('sample.jpg'));
     // Enter tags with pipe expansion
     await page.fill('textarea#media-tags', 'big|huge trees, small|large pots');
     // Chips should not be visible before upload
@@ -30,10 +29,12 @@ test.describe('Tag chips and download UI', () => {
     await page.goto('/');
     // Upload a file with a long name
     const longName = 'averyveryveryveryveryveryverylongfilenamefortestingpurposes.jpg';
-    const filePath = getSampleFile('sample.jpg');
-    // Rename the file for upload
-    const file = new File([await page.evaluate(() => new Blob(["test"]))], longName, { type: 'image/jpeg' });
-    await page.setInputFiles('input[type="file"]', file);
+    // Upload a file with a long name using Playwright's object format
+    await page.setInputFiles('input[type="file"]', {
+      name: longName,
+      mimeType: 'image/jpeg',
+      buffer: Buffer.from('test'),
+    });
     await page.fill('textarea#media-tags', 'test');
     await page.click('button[type="submit"]');
     // Wait for download result
