@@ -18,7 +18,7 @@ importers:
         version: 10.0.0
       '@fastify/static':
         specifier: ^9.1.0
-        version: 9.1.0
+        version: 9.1.3
       fastify:
         specifier: ^5.8.4
         version: 5.8.5
@@ -491,8 +491,8 @@ packages:
   '@fastify/send@4.1.0':
     resolution: {integrity: sha512-TMYeQLCBSy2TOFmV95hQWkiTYgC/SEx7vMdV+wnZVX4tt8VBLKzmH8vV9OzJehV0+XBfg+WxPMt5wp+JBUKsVw==}
 
-  '@fastify/static@9.1.0':
-    resolution: {integrity: sha512-EPRNQYqEYEYTK8yyGbcM0iHpyJaupb94bey5O6iCQfLTADr02kaZU+qeHSdd9H9TiMwTBVkrMa59V8CMbn3avQ==}
+  '@fastify/static@9.1.3':
+    resolution: {integrity: sha512-aXrYtsiryLhRxRNaxNqsn7FUISeb7rB9q4eHUPIot5aeQBLNahnz1m6thzm7JWC1poSGXS9XrX8DvuMivp2hkQ==}
 
   '@humanfs/core@0.19.1':
     resolution: {integrity: sha512-5DyQ4+1JEUzejeK1JGICcideyfUbGixgS9jNgex5nqkW+cY7WZhxBigmieN5Qnw9ZosSNVC9KQKyb+GUaGyKUA==}
@@ -1309,6 +1309,10 @@ packages:
     resolution: {integrity: sha512-JvNw9Y81y33E+BEYPr0U7omo+U9AySnsMsEiXgwT6yqd31VQWTLNQqmT4ou5eqPFUrTfIDFta2wKhB1hyohtAQ==}
     engines: {node: 20 || >=22}
 
+  lru-cache@11.3.5:
+    resolution: {integrity: sha512-NxVFwLAnrd9i7KUBxC4DrUhmgjzOs+1Qm50D3oF1/oL+r1NpZ4gA7xvG0/zJ8evR7zIKn4vLf7qTNduWFtCrRw==}
+    engines: {node: 20 || >=22}
+
   lru-cache@5.1.1:
     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
 
@@ -2112,7 +2116,7 @@ snapshots:
       http-errors: 2.0.1
       mime: 3.0.0
 
-  '@fastify/static@9.1.0':
+  '@fastify/static@9.1.3':
     dependencies:
       '@fastify/accept-negotiator': 2.0.1
       '@fastify/send': 4.1.0
@@ -2920,6 +2924,8 @@ snapshots:
 
   lru-cache@11.3.3: {}
 
+  lru-cache@11.3.5: {}
+
   lru-cache@5.1.1:
     dependencies:
       yallist: 3.1.1
@@ -2981,7 +2987,7 @@ snapshots:
 
   path-scurry@2.0.2:
     dependencies:
-      lru-cache: 11.3.3
+      lru-cache: 11.3.5
       minipass: 7.1.3
 
   pathe@2.0.3: {}
