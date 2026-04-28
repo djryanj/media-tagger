@@ -5,10 +5,11 @@
 Build a mobile-first web app with one fast workflow:
 
 1. Upload a still image, GIF, or video.
-2. Select up to 10 files for one tagging pass.
-3. Enter tags.
-4. Write a metadata payload in the exact shape `tags:<csv list of tags>`.
-5. Download each updated file back in the browser.
+2. Select up to 20 files for one tagging pass.
+3. Choose whether to tag all selected images the same or tag images individually.
+4. Enter tags.
+5. Write a metadata payload in the exact shape `tags:<csv list of tags>`.
+6. Download each updated file back in the browser.
 
 The app must run in Docker, use devcontainers for development, include Makefile support, and ship with strong unit, integration, and e2e coverage plus GitHub CI workflows.
 
@@ -79,8 +80,8 @@ The web app may call this endpoint once per selected file so the browser can dow
 
 - Single mobile-first screen.
 - Controls only for:
-  - Multi-file picker with an upper limit of 10 files
-  - Tags input
+  - Multi-file picker with an upper limit of 20 files
+  - Shared-tag input or individual per-file inputs with previews and copy/paste controls
   - Submit action
   - Success or failure state
 - Prioritize low-latency interaction and minimal copy.

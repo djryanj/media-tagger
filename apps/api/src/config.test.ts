@@ -26,11 +26,11 @@ describe("server runtime config", () => {
     expect(
       getServerRuntimeConfig({
         [GIT_HASH_ENV_VAR]: "abc12345",
-        [VERSION_ENV_VAR]: "0.2.0",
+        [VERSION_ENV_VAR]: "0.3.0",
       }),
     ).toMatchObject({
       gitHash: "abc12345",
-      version: "v0.2.0",
+      version: "v0.3.0",
     });
   });
 

@@ -10,7 +10,7 @@ function buildConfigResponse(limitBytes = 512 * 1024 * 1024) {
       gitHash: "abc12345",
       inMemoryUploadLimitBytes: limitBytes,
       maxUploadBytes: 1024 * 1024 * 1024,
-      version: "v0.2.0",
+      version: "v0.3.0",
     }),
     {
       status: 200,
@@ -48,7 +48,7 @@ describe("App", () => {
 
     render(<App />);
     await screen.findByText("The server accepts files up to 1 GB.");
-    expect(screen.getByText("Version v0.2.0 | Commit abc12345")).toBeVisible();
+    expect(screen.getByText("Version v0.3.0 | Commit abc12345")).toBeVisible();
 
     await user.click(
       screen.getByRole("button", { name: "Tag and download files" }),
@@ -179,11 +179,11 @@ describe("App", () => {
     ).toBeVisible();
   });
 
-  it("rejects selecting more than 10 files", async () => {
+  it("rejects selecting more than 20 files", async () => {
     const user = userEvent.setup();
     const fetchMock = vi.mocked(fetch);
     const uploadedFiles = Array.from(
-      { length: 11 },
+      { length: 21 },
       (_, index) =>
         new File([`png-data-${index}`], `sample-${index + 1}.png`, {
           type: "image/png",
@@ -200,10 +200,131 @@ describe("App", () => {
     );
 
     expect(
-      screen.getByText("Choose no more than 10 files at once."),
+      screen.getByText("Choose no more than 20 files at once."),
     ).toBeVisible();
     expect(screen.getByText("No files selected")).toBeVisible();
     expect(getUploadCalls(fetchMock)).toHaveLength(0);
+  });
+
+  it("submits individual tags for each selected file", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.mocked(fetch);
+    const uploadedFiles = [
+      new File(["png-data-1"], "sample-1.png", {
+        type: "image/png",
+      }),
+      new File(["png-data-2"], "sample-2.png", {
+        type: "image/png",
+      }),
+    ];
+
+    fetchMock.mockResolvedValueOnce(buildConfigResponse());
+    fetchMock.mockResolvedValueOnce(
+      new Response(new Blob(["tagged-media-1"]), {
+        status: 200,
+        headers: {
+          "content-disposition": 'attachment; filename="tagged-sample-1.png"',
+          "content-type": "image/png",
+        },
+      }),
+    );
+    fetchMock.mockResolvedValueOnce(
+      new Response(new Blob(["tagged-media-2"]), {
+        status: 200,
+        headers: {
+          "content-disposition": 'attachment; filename="tagged-sample-2.png"',
+          "content-type": "image/png",
+        },
+      }),
+    );
+
+    render(<App />);
+    await screen.findByText("The server accepts files up to 1 GB.");
+
+    await user.upload(
+      screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+      uploadedFiles,
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Tag images individually" }),
+    );
+
+    expect(
+      screen.getByRole("img", { name: "Preview of sample-1.png" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("img", { name: "Preview of sample-2.png" }),
+    ).toBeVisible();
+
+    await user.type(
+      screen.getByRole("textbox", { name: "Tags for sample-1.png" }),
+      "forest",
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Tags for sample-2.png" }),
+      "desert",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Tag and download files" }),
+    );
+
+    await waitFor(() => expect(getUploadCalls(fetchMock)).toHaveLength(2));
+
+    const uploadCalls = getUploadCalls(fetchMock);
+    const firstRequest = uploadCalls[0]?.[1];
+    const secondRequest = uploadCalls[1]?.[1];
+    const firstFormData = firstRequest?.body as FormData;
+    const secondFormData = secondRequest?.body as FormData;
+
+    expect(firstFormData.get("tags")).toBe("forest");
+    expect(secondFormData.get("tags")).toBe("desert");
+    expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledTimes(2);
+  });
+
+  it("copies and pastes tags between individual tag inputs", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.mocked(fetch);
+    const uploadedFiles = [
+      new File(["png-data-1"], "sample-1.png", {
+        type: "image/png",
+      }),
+      new File(["png-data-2"], "sample-2.png", {
+        type: "image/png",
+      }),
+    ];
+
+    fetchMock.mockResolvedValueOnce(buildConfigResponse());
+
+    render(<App />);
+    await screen.findByText("The server accepts files up to 1 GB.");
+
+    await user.upload(
+      screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+      uploadedFiles,
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Tag images individually" }),
+    );
+
+    const firstInput = screen.getByRole("textbox", {
+      name: "Tags for sample-1.png",
+    });
+    const secondInput = screen.getByRole("textbox", {
+      name: "Tags for sample-2.png",
+    });
+
+    await user.type(firstInput, "forest, sunrise");
+    await user.click(screen.getAllByRole("button", { name: "Copy tags" })[0]!);
+    await user.click(
+      screen.getAllByRole("button", {
+        name: "Paste copied tags from sample-1.png",
+      })[1]!,
+    );
+
+    expect(secondInput).toHaveValue("forest, sunrise");
+    expect(
+      screen.getByText("Pasted copied tags into sample-2.png."),
+    ).toBeVisible();
   });
 
   it("shows the overwrite warning and server threshold before submission", async () => {
