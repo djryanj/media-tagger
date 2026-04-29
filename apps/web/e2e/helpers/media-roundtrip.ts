@@ -138,6 +138,7 @@ async function createFixture(outputPath: string, ffmpegArgs: string[]) {
 async function expectTaggedPayload(
   filePath: string,
   readFields: string[],
+  expectedPayload = EXPECTED_PAYLOAD,
 ): Promise<void> {
   for (const readField of readFields) {
     const { stdout } = await execFileAsync("exiftool", [
@@ -146,12 +147,14 @@ async function expectTaggedPayload(
       filePath,
     ]);
 
-    if (stdout.trim() === EXPECTED_PAYLOAD) {
+    if (stdout.trim() === expectedPayload) {
       return;
     }
   }
 
   throw new Error(
-    `Expected one of ${readFields.join(", ")} to equal ${EXPECTED_PAYLOAD}.`,
+    `Expected one of ${readFields.join(", ")} to equal ${expectedPayload}.`,
   );
 }
+
+export { createFixture, expectTaggedPayload };

@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project uses semantic version tags for releases.
 
+## [0.3.0] - Unreleased
+
+### Added
+
+- Shared and individual tagging modes in the web UI, including per-image previews and copy/paste controls for individual tag inputs. [#33](https://github.com/djryanj/media-tagger/issues/33)
+
+### Changed
+
+- Increased the multi-file upload limit from 10 to 20 files across the app, tests, and documentation. [#33](https://github.com/djryanj/media-tagger/issues/33)
+
 ## [0.2.4] - 2026-04-25
 
 ### Changed

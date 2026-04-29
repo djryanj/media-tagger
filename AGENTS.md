@@ -5,7 +5,7 @@ Human and AI contributors should optimize for a clean, reliable core workflow ra
 ## Non-Negotiable Product Contract
 
 - The canonical payload format is `tags:<csv list of tags>` unless the user intentionally types extra literal characters into the tags input.
-- The app supports a single workflow: upload up to 10 files, tag them once, rewrite metadata, and download each result individually.
+- The app supports a single workflow: upload up to 20 files, apply one shared tag set or tag files individually, rewrite metadata, and download each result individually.
 - The first UI should remain a single mobile-first screen.
 
 ## Architecture Direction

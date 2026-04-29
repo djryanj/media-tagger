@@ -1,7 +1,9 @@
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 
 const ACCEPTED_FILE_TYPES = ".jpg,.jpeg,.png,.webp,.gif,.mp4,.mov";
-const MAX_FILES = 10;
+const MAX_FILES = 20;
+
+type TagMode = "shared" | "individual";
 
 type ServerConfig = {
   gitHash: string;
@@ -17,11 +19,25 @@ type ProcessedDownload = {
   blob: Blob;
 };
 
+type ConfirmedTagGroup = {
+  sourceFilename: string;
+  tags: string[];
+};
+
 export default function App() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [tagMode, setTagMode] = useState<TagMode>("shared");
   const [tags, setTags] = useState("");
   const [status, setStatus] = useState<string>("Ready for upload.");
-  const [confirmedTags, setConfirmedTags] = useState<string[]>([]);
+  const [perFileTags, setPerFileTags] = useState<Record<string, string>>({});
+  const [copiedTags, setCopiedTags] = useState<string | null>(null);
+  const [copiedFromFilename, setCopiedFromFilename] = useState<string | null>(
+    null,
+  );
+  const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
+  const [confirmedTagGroups, setConfirmedTagGroups] = useState<
+    ConfirmedTagGroup[]
+  >([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [processedDownloads, setProcessedDownloads] = useState<
     ProcessedDownload[]
@@ -68,9 +84,77 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    const nextPreviewUrls: Record<string, string> = {};
+
+    for (const file of selectedFiles) {
+      if (!file.type.startsWith("image/")) {
+        continue;
+      }
+
+      nextPreviewUrls[buildFileId(file)] = URL.createObjectURL(file);
+    }
+
+    setPreviewUrls(nextPreviewUrls);
+
+    return () => {
+      for (const url of Object.values(nextPreviewUrls)) {
+        URL.revokeObjectURL(url);
+      }
+    };
+  }, [selectedFiles]);
+
+  const visibleConfirmedTagGroups = getVisibleConfirmedTagGroups(
+    tagMode,
+    confirmedTagGroups,
+  );
+
   function handleManualDownload(download: ProcessedDownload) {
     triggerDownload(download.blob, download.downloadFilename);
     setStatus(`Manual download started for ${download.downloadFilename}.`);
+  }
+
+  function handleTagModeChange(nextMode: TagMode) {
+    setTagMode(nextMode);
+    setErrorMessage(null);
+
+    if (nextMode === "individual") {
+      setPerFileTags((previousTags) =>
+        buildPerFileTagMap(selectedFiles, previousTags, tags),
+      );
+    }
+  }
+
+  function handlePerFileTagsChange(fileId: string, value: string) {
+    setPerFileTags((previousTags) => ({
+      ...previousTags,
+      [fileId]: value,
+    }));
+  }
+
+  function handleCopyTags(file: File) {
+    const copiedValue = perFileTags[buildFileId(file)] ?? "";
+
+    setCopiedTags(copiedValue);
+    setCopiedFromFilename(file.name);
+    setStatus(
+      copiedValue.trim()
+        ? `Copied tags from ${file.name}.`
+        : `Copied an empty tag field from ${file.name}.`,
+    );
+  }
+
+  function handlePasteTags(file: File) {
+    if (copiedTags === null) {
+      return;
+    }
+
+    setPerFileTags((previousTags) => ({
+      ...previousTags,
+      [buildFileId(file)]: copiedTags,
+    }));
+    setErrorMessage(null);
+    setStatus(`Pasted copied tags into ${file.name}.`);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -81,8 +165,27 @@ export default function App() {
       return;
     }
 
-    if (!tags.trim()) {
+    const tagAssignments = selectedFiles.map((file) => ({
+      file,
+      value:
+        tagMode === "shared" ? tags : (perFileTags[buildFileId(file)] ?? ""),
+    }));
+
+    if (tagMode === "shared" && !tags.trim()) {
       setErrorMessage("Enter at least one tag.");
+      return;
+    }
+
+    const missingTagsAssignment = tagAssignments.find(
+      ({ value }) => !value.trim(),
+    );
+
+    if (missingTagsAssignment) {
+      setErrorMessage(
+        tagMode === "shared"
+          ? "Enter at least one tag."
+          : `Enter at least one tag for ${missingTagsAssignment.file.name}.`,
+      );
       return;
     }
 
@@ -100,15 +203,17 @@ export default function App() {
     setErrorMessage(null);
     setProcessedDownloads([]);
     setWarningMessages([]);
-    setConfirmedTags([]);
+    setConfirmedTagGroups([]);
 
     const failures: Array<{ file: string; message: string }> = [];
     const downloadedFilenames: string[] = [];
     const responseWarnings = new Set<string>();
+    const nextConfirmedTagGroups: ConfirmedTagGroup[] = [];
 
     try {
-      let lastConfirmedTags: string[] = [];
-      for (const [index, file] of selectedFiles.entries()) {
+      for (const [index, assignment] of tagAssignments.entries()) {
+        const { file, value } = assignment;
+
         setStatus(
           selectedFiles.length === 1
             ? `Writing metadata for ${file.name}...`
@@ -118,7 +223,7 @@ export default function App() {
         try {
           const formData = new FormData();
           formData.append("fileSize", String(file.size));
-          formData.append("tags", tags);
+          formData.append("tags", value);
           formData.append("file", file);
 
           const response = await fetch("/api/media/tag", {
@@ -131,15 +236,18 @@ export default function App() {
             throw new Error(responseError);
           }
 
-          // Get confirmed tags from server response header (JSON-encoded)
           const confirmedTagsHeader = response.headers.get(
             "x-media-tagger-confirmed-tags",
           );
+
           if (confirmedTagsHeader) {
             try {
-              lastConfirmedTags = JSON.parse(confirmedTagsHeader);
+              nextConfirmedTagGroups.push({
+                sourceFilename: file.name,
+                tags: JSON.parse(confirmedTagsHeader) as string[],
+              });
             } catch {
-              // ignore JSON parse error
+              // ignore invalid header payloads
             }
           }
 
@@ -193,9 +301,9 @@ export default function App() {
       }
 
       setWarningMessages(Array.from(responseWarnings));
-      // Only set confirmed tags after all uploads complete
-      if (lastConfirmedTags.length > 0) {
-        setConfirmedTags(lastConfirmedTags);
+
+      if (nextConfirmedTagGroups.length > 0) {
+        setConfirmedTagGroups(nextConfirmedTagGroups);
       }
 
       if (downloadedFilenames.length === 0) {
@@ -219,6 +327,9 @@ export default function App() {
     if (files.length > MAX_FILES) {
       event.target.value = "";
       setSelectedFiles([]);
+      setPerFileTags({});
+      setCopiedTags(null);
+      setCopiedFromFilename(null);
       setProcessedDownloads([]);
       setErrorMessage(`Choose no more than ${MAX_FILES} files at once.`);
       setStatus("Ready for upload.");
@@ -226,7 +337,13 @@ export default function App() {
     }
 
     setSelectedFiles(files);
+    setPerFileTags((previousTags) =>
+      buildPerFileTagMap(files, previousTags, tags),
+    );
+    setCopiedTags(null);
+    setCopiedFromFilename(null);
     setProcessedDownloads([]);
+    setConfirmedTagGroups([]);
 
     if (files.length > 0) {
       setStatus(
@@ -247,8 +364,9 @@ export default function App() {
         <header className="panel-header">
           <h1>Media Tagger</h1>
           <p className="lede">
-            Upload up to 10 supported files, enter one set of tags, and download
-            each updated file with a canonical metadata payload.
+            Upload up to 20 supported files, apply one shared tag set or tag
+            each file individually, and download each updated file with a
+            canonical metadata payload.
           </p>
           <p className="build-metadata">
             {formatBuildMetadata(serverConfig, serverConfigState)}
@@ -260,7 +378,7 @@ export default function App() {
             <span className="field-label">Files</span>
             <span className="field-help">
               Supported formats: JPG, JPEG, PNG, WebP, GIF, MP4, and MOV. Tag up
-              to 10 files at once, then download each result individually.
+              to 20 files at once, then download each result individually.
             </span>
             <span className="field-help">
               {formatServerThresholdCopy(serverConfig, serverConfigState)}
@@ -293,21 +411,143 @@ export default function App() {
             />
           </label>
 
-          <label className="field-card" htmlFor="media-tags">
-            <span className="field-label">Tags</span>
-            <span className="field-help">
-              Separate tags with commas, new lines, or use <code>|</code> for
-              expansion. Duplicate tags are removed.
-            </span>
-            <textarea
-              id="media-tags"
-              className="tags-input"
-              onChange={(event) => setTags(event.target.value)}
-              placeholder="forest, big|huge trees, sunrise"
-              rows={4}
-              value={tags}
-            />
-          </label>
+          <fieldset className="field-card mode-card">
+            <legend className="field-label">Tagging mode</legend>
+            <p className="field-help">
+              Apply one tag set to every selected file, or enter tags for each
+              file separately.
+            </p>
+            <div
+              className="mode-options"
+              aria-label="Tagging mode"
+              role="group"
+            >
+              <button
+                aria-pressed={tagMode === "shared"}
+                className={`mode-button ${tagMode === "shared" ? "mode-button-active" : ""}`}
+                onClick={() => handleTagModeChange("shared")}
+                type="button"
+              >
+                Tag all images the same
+              </button>
+              <button
+                aria-pressed={tagMode === "individual"}
+                className={`mode-button ${tagMode === "individual" ? "mode-button-active" : ""}`}
+                onClick={() => handleTagModeChange("individual")}
+                type="button"
+              >
+                Tag images individually
+              </button>
+            </div>
+          </fieldset>
+
+          {tagMode === "shared" ? (
+            <section className="field-card" aria-label="Tags">
+              <label className="field-label" htmlFor="media-tags">
+                Tags
+              </label>
+              <span className="field-help">
+                Separate tags with commas, new lines, or use <code>|</code> for
+                expansion. Duplicate tags are removed.
+              </span>
+              <textarea
+                id="media-tags"
+                className="tags-input"
+                onChange={(event) => setTags(event.target.value)}
+                placeholder="forest, big|huge trees, sunrise"
+                rows={4}
+                value={tags}
+              />
+            </section>
+          ) : (
+            <section
+              className="field-card individual-tags-card"
+              aria-label="Individual tags"
+            >
+              <span className="field-label">Individual tags</span>
+              <span className="field-help">
+                Enter tags for each selected file. Copy one field, then paste it
+                into another when you want to reuse the same tag set.
+              </span>
+              {selectedFiles.length > 0 ? (
+                <div className="individual-tags-list">
+                  {selectedFiles.map((file) => {
+                    const fileId = buildFileId(file);
+                    const previewUrl = previewUrls[fileId] ?? null;
+                    const copiedFromLabel = copiedFromFilename
+                      ? `Paste copied tags from ${copiedFromFilename}`
+                      : "Paste copied tags";
+
+                    return (
+                      <article className="individual-tag-item" key={fileId}>
+                        <div className="preview-frame">
+                          {previewUrl ? (
+                            <img
+                              alt={`Preview of ${file.name}`}
+                              className="preview-image"
+                              src={previewUrl}
+                            />
+                          ) : (
+                            <div
+                              className="preview-placeholder"
+                              aria-label={`No image preview for ${file.name}`}
+                            >
+                              <span>{formatPreviewLabel(file)}</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="individual-tag-copy">
+                          <span className="field-value individual-tag-filename">
+                            {file.name}
+                          </span>
+                          <label
+                            className="individual-tag-label"
+                            htmlFor={`media-tags-${fileId}`}
+                          >
+                            Tags for {file.name}
+                          </label>
+                          <textarea
+                            id={`media-tags-${fileId}`}
+                            className="tags-input individual-tags-input"
+                            onChange={(event) =>
+                              handlePerFileTagsChange(
+                                fileId,
+                                event.target.value,
+                              )
+                            }
+                            placeholder="forest, big|huge trees, sunrise"
+                            rows={3}
+                            value={perFileTags[fileId] ?? ""}
+                          />
+                          <div className="individual-tag-actions">
+                            <button
+                              className="secondary-button"
+                              onClick={() => handleCopyTags(file)}
+                              type="button"
+                            >
+                              Copy tags
+                            </button>
+                            <button
+                              className="secondary-button"
+                              disabled={copiedTags === null}
+                              onClick={() => handlePasteTags(file)}
+                              type="button"
+                            >
+                              {copiedFromLabel}
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <span className="field-value">
+                  Choose files to enter individual tags.
+                </span>
+              )}
+            </section>
+          )}
 
           <section
             className="field-card warning-card"
@@ -328,21 +568,40 @@ export default function App() {
             {isSubmitting ? "Writing metadata..." : "Tag and download files"}
           </button>
 
-          {/* Confirmed tags chips after upload */}
-          {confirmedTags.length > 0 && (
+          {visibleConfirmedTagGroups.length > 0 ? (
             <div className="confirmed-tags-block">
               <div className="confirmed-tags-label">
                 Tags applied by the server:
               </div>
-              <div className="tag-chips-row" aria-label="Confirmed tag chips">
-                {confirmedTags.map((tag) => (
-                  <span className="tag-chip" key={tag}>
-                    {tag}
-                  </span>
+              <div className="confirmed-tags-groups">
+                {visibleConfirmedTagGroups.map((group) => (
+                  <section
+                    className="confirmed-tags-group"
+                    key={`${group.sourceFilename}-${group.tags.join("|")}`}
+                  >
+                    {tagMode === "individual" ? (
+                      <div className="confirmed-tags-file">
+                        {group.sourceFilename}
+                      </div>
+                    ) : null}
+                    <div
+                      className="tag-chips-row"
+                      aria-label={`Confirmed tags for ${group.sourceFilename}`}
+                    >
+                      {group.tags.map((tag) => (
+                        <span
+                          className="tag-chip"
+                          key={`${group.sourceFilename}-${tag}`}
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </section>
                 ))}
               </div>
             </div>
-          )}
+          ) : null}
         </form>
 
         {processedDownloads.length > 0 ? (
@@ -513,4 +772,46 @@ function formatBytes(bytes: number): string {
 
 function stripTrailingZeroes(value: string): string {
   return value.replace(/\.0$/, "");
+}
+
+function buildFileId(file: File): string {
+  return `${file.name}-${file.size}-${file.lastModified}`;
+}
+
+function buildPerFileTagMap(
+  files: File[],
+  previousTags: Record<string, string>,
+  fallbackTags: string,
+): Record<string, string> {
+  return Object.fromEntries(
+    files.map((file) => {
+      const fileId = buildFileId(file);
+      return [fileId, previousTags[fileId] ?? fallbackTags];
+    }),
+  );
+}
+
+function formatPreviewLabel(file: File): string {
+  const extension = file.name.split(".").pop()?.toUpperCase();
+  return extension ?? "MEDIA";
+}
+
+function getVisibleConfirmedTagGroups(
+  tagMode: TagMode,
+  confirmedTagGroups: ConfirmedTagGroup[],
+): ConfirmedTagGroup[] {
+  if (confirmedTagGroups.length === 0) {
+    return confirmedTagGroups;
+  }
+
+  if (tagMode === "shared") {
+    return [
+      {
+        sourceFilename: "All files",
+        tags: confirmedTagGroups[0]?.tags ?? [],
+      },
+    ];
+  }
+
+  return confirmedTagGroups;
 }

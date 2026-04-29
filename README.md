@@ -1,6 +1,6 @@
 # Media Tagger
 
-Media Tagger is a mobile-first web app for writing a single specific metadata payload into still images, GIFs, and videos for the purpose of pre-seeding the image with tags that its sister application, [Media Viewer](https://github.com/djryanj/media-viewer) can consume. One set of tags can be applied to up to 10 selected files in one submission.
+Media Tagger is a mobile-first web app for writing a single specific metadata payload into still images, GIFs, and videos for the purpose of pre-seeding the image with tags that its sister application, [Media Viewer](https://github.com/djryanj/media-viewer) can consume. You can apply one tag set to up to 20 selected files in one submission, or switch to individual tagging for per-image inputs with previews and copy/paste controls.
 
 The reason you might want this is because [Media Viewer](https://github.com/djryanj/media-viewer) does not have (and will not have) the ability to upload media to it. So if your workflow sometimes looks like this:
 
@@ -10,10 +10,11 @@ The reason you might want this is because [Media Viewer](https://github.com/djry
 
 The core workflow is intentionally narrow:
 
-1. Upload up to 10 supported media files.
-2. Enter tags.
-3. Render the payload in the exact shape `tags:<csv list of tags>`.
-4. Download each updated file individually in the browser.
+1. Upload up to 20 supported media files.
+2. Choose shared or individual tagging mode.
+3. Enter shared tags or per-file tags.
+4. Render the payload in the exact shape `tags:<csv list of tags>`.
+5. Download each updated file individually in the browser.
 
 ## Supported Formats
 
@@ -102,7 +103,7 @@ Build the image locally:
 
 ```bash
 docker build \
-	--build-arg VERSION=v0.2.0 \
+	--build-arg VERSION=v0.3.0 \
 	--build-arg COMMIT=$(git rev-parse --short=8 HEAD) \
 	-t media-tagger:local .
 ```
@@ -112,7 +113,7 @@ Run it with a read-only filesystem, a writable tmpfs for metadata processing, an
 ```bash
 docker run --rm \
 	--publish 3000:3000 \
-	--env MEDIA_TAGGER_VERSION=v0.2.0 \
+	--env MEDIA_TAGGER_VERSION=v0.3.0 \
 	--env MEDIA_TAGGER_GIT_HASH=$(git rev-parse --short=8 HEAD) \
 	--env MEDIA_TAGGER_MAX_UPLOAD_BYTES=1073741824 \
 	--env MEDIA_TAGGER_IN_MEMORY_UPLOAD_LIMIT_BYTES=536870912 \
@@ -130,7 +131,7 @@ The container serves both the React frontend and the Fastify API on port `3000`.
 The repository includes [compose.yml](compose.yml). Start the app with:
 
 ```bash
-MEDIA_TAGGER_VERSION=v0.2.0 MEDIA_TAGGER_GIT_HASH=$(git rev-parse --short=8 HEAD) docker-compose up --build
+MEDIA_TAGGER_VERSION=v0.3.0 MEDIA_TAGGER_GIT_HASH=$(git rev-parse --short=8 HEAD) docker-compose up --build
 ```
 
 Then open `http://127.0.0.1:3000`.
