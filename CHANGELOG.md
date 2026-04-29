@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project uses semantic version tags for releases.
 
+## [0.3.2] - Unreleased
+
+### Added
+
+- Shared tagging mode now keeps per-file media previews visible and adds remove controls so files can be dropped from the queue before submission. [#38](https://github.com/djryanj/media-tagger/issues/38)
+- Individual tagging mode now supports per-file `Tag and download` actions that process one file, remove it from the queue on success, and notify the user that it will not be included in the later bulk run. [#38](https://github.com/djryanj/media-tagger/issues/38)
+
+### Fixed
+
+- Long filenames in preview cards no longer break the tagging layout, and automated coverage now exercises shared preview removal plus the new per-file tagging workflow. [#38](https://github.com/djryanj/media-tagger/issues/38)
+
 ## [0.3.1] - 2026-04-29
 
 ### Changed

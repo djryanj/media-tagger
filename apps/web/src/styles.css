@@ -176,6 +176,26 @@ h1 {
   resize: vertical;
 }
 
+.shared-preview-list {
+  display: grid;
+  gap: 12px;
+}
+
+.shared-preview-item {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #d6d6d6;
+  border-radius: 12px;
+  background: #fafafa;
+}
+
+.shared-preview-copy {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
 .mode-options {
   display: grid;
   gap: 10px;
@@ -284,11 +304,16 @@ h1 {
 .individual-tag-copy {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .individual-tag-filename {
+  display: block;
+  min-width: 0;
   font-weight: 700;
   color: #1f1f1f;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .individual-tag-label {
@@ -482,6 +507,11 @@ h1 {
   }
 
   .individual-tag-item {
+    grid-template-columns: minmax(10rem, 11rem) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .shared-preview-item {
     grid-template-columns: minmax(10rem, 11rem) minmax(0, 1fr);
     align-items: start;
   }

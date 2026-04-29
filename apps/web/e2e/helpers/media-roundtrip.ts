@@ -30,7 +30,7 @@ export async function runMediaRoundTrip(page: Page, fixture: MediaFixture) {
     await page.locator("#media-tags").fill(TEST_TAGS);
 
     const submitButton = page.getByRole("button", {
-      name: "Tag and download files",
+      name: "Tag all and download",
     });
     await expect(submitButton).toBeVisible();
     await expect(submitButton).toBeEnabled();
@@ -75,7 +75,7 @@ export async function runMultiFileRoundTrip(
     await page.locator("#media-tags").fill(TEST_TAGS);
 
     const submitButton = page.getByRole("button", {
-      name: "Tag and download files",
+      name: "Tag all and download",
     });
     await expect(submitButton).toBeVisible();
     await expect(submitButton).toBeEnabled();
