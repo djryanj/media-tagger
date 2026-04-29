@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { expect, test, type Download } from "@playwright/test";
+import { expect, test, type Download, type Locator } from "@playwright/test";
 
 import {
   createFixture,
@@ -14,6 +14,12 @@ type IndividualFixture = MediaFixture & {
   expectedPayload: string;
   tags: string;
 };
+
+async function activateButton(button: Locator) {
+  await button.focus();
+  await button.press("Enter");
+}
+
 
 test("round-trips metadata for individually tagged files with copy and paste", async ({
   page,
@@ -65,7 +71,14 @@ test("round-trips metadata for individually tagged files with copy and paste", a
 
     await page.goto("/");
     await page.locator("#media-file").setInputFiles(sourcePaths);
-    await page.getByRole("button", { name: "Tag images individually" }).click();
+    await expect(page.getByText("Selected 2 files.")).toBeVisible();
+    const individualModeButton = page.getByRole("button", {
+      name: "Tag images individually",
+    });
+    await expect(individualModeButton).toBeVisible();
+    await expect(individualModeButton).toBeEnabled();
+    await activateButton(individualModeButton);
+    await expect(page.locator(".individual-tags-card")).toBeVisible();
 
     await expect(
       page.getByRole("img", { name: "Preview of sample-a.png" }),
@@ -75,15 +88,24 @@ test("round-trips metadata for individually tagged files with copy and paste", a
     ).toBeVisible();
 
     await page.getByLabel("Tags for sample-a.png").fill(fixtures[0].tags);
-    await page.getByRole("button", { name: "Copy tags" }).nth(0).click();
-    await page
-      .getByRole("button", { name: "Paste copied tags from sample-a.png" })
-      .nth(1)
-      .click();
+    await expect(page.getByLabel("Tags for sample-a.png")).toHaveValue(
+      fixtures[0].tags,
+    );
+    const copyButtons = page.getByRole("button", { name: "Copy tags" });
+    await activateButton(copyButtons.nth(0));
+    const pasteButtons = page.getByRole("button", {
+      name: "Paste copied tags from sample-a.png",
+    });
+    await expect(pasteButtons).toHaveCount(2);
+    await expect(pasteButtons.nth(1)).toBeEnabled();
+    await activateButton(pasteButtons.nth(1));
     await expect(page.getByLabel("Tags for sample-b.webp")).toHaveValue(
       fixtures[0].tags,
     );
     await page.getByLabel("Tags for sample-b.webp").fill(fixtures[1].tags);
+    await expect(page.getByLabel("Tags for sample-b.webp")).toHaveValue(
+      fixtures[1].tags,
+    );
 
     const submitButton = page.getByRole("button", {
       name: "Tag and download files",
@@ -126,6 +148,43 @@ test("round-trips metadata for individually tagged files with copy and paste", a
     );
 
     await expect(page.getByText("Downloaded 2 of 2 files.")).toBeVisible();
+  } finally {
+    await rm(temporaryDirectory, { force: true, recursive: true });
+  }
+});
+
+test("shows an MP4 preview in individual mode", async ({ page }) => {
+  const temporaryDirectory = await mkdtemp(join(tmpdir(), "media-tagger-e2e-"));
+  const filename = "sample.mp4";
+  const sourcePath = join(temporaryDirectory, filename);
+
+  try {
+    await createFixture(sourcePath, [
+      "-f",
+      "lavfi",
+      "-i",
+      "color=c=#336699:s=32x32:d=1",
+      "-c:v",
+      "mpeg4",
+      "-pix_fmt",
+      "yuv420p",
+    ]);
+
+    await page.goto("/");
+    await page.locator("#media-file").setInputFiles(sourcePath);
+    await expect(page.getByText(`Selected ${filename}.`)).toBeVisible();
+
+    const individualModeButton = page.getByRole("button", {
+      name: "Tag images individually",
+    });
+    await expect(individualModeButton).toBeVisible();
+    await expect(individualModeButton).toBeEnabled();
+    await activateButton(individualModeButton);
+
+    await expect(page.locator(".individual-tags-card")).toBeVisible();
+
+    const videoPreview = page.locator(`video[aria-label="Preview of ${filename}"]`);
+    await expect(videoPreview).toBeVisible();
   } finally {
     await rm(temporaryDirectory, { force: true, recursive: true });
   }

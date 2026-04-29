@@ -281,6 +281,32 @@ describe("App", () => {
     expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledTimes(2);
   });
 
+  it("shows a video preview for mp4 files in individual mode", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.mocked(fetch);
+    const uploadedFile = new File(["mp4-data"], "sample.mp4", {
+      type: "video/mp4",
+    });
+
+    fetchMock.mockResolvedValueOnce(buildConfigResponse());
+
+    render(<App />);
+    await screen.findByText("The server accepts files up to 1 GB.");
+
+    await user.upload(
+      screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+      uploadedFile,
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Tag images individually" }),
+    );
+
+    expect(screen.getByLabelText("Preview of sample.mp4")).toBeVisible();
+    expect(
+      screen.queryByLabelText("No preview available for sample.mp4"),
+    ).toBeNull();
+  });
+
   it("copies and pastes tags between individual tag inputs", async () => {
     const user = userEvent.setup();
     const fetchMock = vi.mocked(fetch);

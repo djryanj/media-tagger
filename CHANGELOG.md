@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project uses semantic version tags for releases.
 
+## [0.3.1] - Unreleased
+
+### Changed
+
+- Improved the issue 33 tagging workflow with larger mobile-friendly mode buttons and broader individual-tag preview coverage, including MP4 files. [#33](https://github.com/djryanj/media-tagger/issues/33)
+
+### Fixed
+
+- Hardened the issue 33 mobile individual-tag flow by addressing submit-button interaction issues in Playwright coverage and extending automated checks for individual tagging behavior. [#33](https://github.com/djryanj/media-tagger/issues/33)
+
 ## [0.3.0] - 2026-04-29
 
 ### Added
