@@ -108,7 +108,7 @@ test("round-trips metadata for individually tagged files with copy and paste", a
     );
 
     const submitButton = page.getByRole("button", {
-      name: "Tag and download files",
+      name: "Tag all and download",
     });
     await expect(submitButton).toBeEnabled();
 

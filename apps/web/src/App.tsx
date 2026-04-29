@@ -24,6 +24,16 @@ type ConfirmedTagGroup = {
   tags: string[];
 };
 
+type TagAssignment = {
+  file: File;
+  value: string;
+};
+
+type ProcessTagAssignmentsResult = {
+  downloadedFilenames: string[];
+  failures: Array<{ file: string; message: string }>;
+};
+
 export default function App() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [tagMode, setTagMode] = useState<TagMode>("shared");
@@ -109,6 +119,274 @@ export default function App() {
     confirmedTagGroups,
   );
 
+  function getTagAssignments(
+    files: File[],
+    modeOverride: TagMode = tagMode,
+  ): TagAssignment[] {
+    return files.map((file) => ({
+      file,
+      value:
+        modeOverride === "shared"
+          ? tags
+          : (perFileTags[buildFileId(file)] ?? ""),
+    }));
+  }
+
+  function removeQueuedFile(fileToRemove: File, skipStatusUpdate = false) {
+    const fileIdToRemove = buildFileId(fileToRemove);
+
+    setSelectedFiles((previousFiles) => {
+      const nextFiles = previousFiles.filter(
+        (file) => buildFileId(file) !== fileIdToRemove,
+      );
+
+      setPerFileTags((previousTags) => {
+        const nextEntries = Object.entries(previousTags).filter(
+          ([fileId]) => fileId !== fileIdToRemove,
+        );
+
+        return Object.fromEntries(nextEntries);
+      });
+
+      if (copiedFromFilename === fileToRemove.name) {
+        setCopiedTags(null);
+        setCopiedFromFilename(null);
+      }
+
+      setErrorMessage(null);
+
+      if (!skipStatusUpdate) {
+        setStatus(
+          nextFiles.length === 0
+            ? `Removed ${fileToRemove.name} from the queue.`
+            : `Removed ${fileToRemove.name} from the queue. ${nextFiles.length} file${nextFiles.length === 1 ? " remains" : "s remain"}.`,
+        );
+      }
+
+      return nextFiles;
+    });
+  }
+
+  function validateTagAssignments(
+    tagAssignments: TagAssignment[],
+    modeOverride: TagMode,
+  ): string | null {
+    if (tagAssignments.length === 0) {
+      return "Choose at least one file before submitting.";
+    }
+
+    if (modeOverride === "shared" && !tags.trim()) {
+      return "Enter at least one tag.";
+    }
+
+    const missingTagsAssignment = tagAssignments.find(
+      ({ value }) => !value.trim(),
+    );
+
+    if (missingTagsAssignment) {
+      return modeOverride === "shared"
+        ? "Enter at least one tag."
+        : `Enter at least one tag for ${missingTagsAssignment.file.name}.`;
+    }
+
+    if (
+      serverConfig &&
+      tagAssignments.some(({ file }) => file.size > serverConfig.maxUploadBytes)
+    ) {
+      return `Choose files no larger than ${formatBytes(serverConfig.maxUploadBytes)}.`;
+    }
+
+    return null;
+  }
+
+  async function processTagAssignments(
+    tagAssignments: TagAssignment[],
+    options?: {
+      resetResults?: boolean;
+      successStatus?: (downloadedFilenames: string[]) => string;
+      totalCountLabel?: number;
+    },
+  ): Promise<ProcessTagAssignmentsResult> {
+    const resetResults = options?.resetResults ?? true;
+    const totalCountLabel = options?.totalCountLabel ?? tagAssignments.length;
+
+    setIsSubmitting(true);
+    setErrorMessage(null);
+
+    if (resetResults) {
+      setProcessedDownloads([]);
+      setWarningMessages([]);
+      setConfirmedTagGroups([]);
+    }
+
+    const failures: Array<{ file: string; message: string }> = [];
+    const downloadedFilenames: string[] = [];
+    const responseWarnings = new Set<string>();
+    const nextConfirmedTagGroups: ConfirmedTagGroup[] = [];
+
+    try {
+      for (const [index, assignment] of tagAssignments.entries()) {
+        const { file, value } = assignment;
+
+        setStatus(
+          totalCountLabel === 1
+            ? `Writing metadata for ${file.name}...`
+            : `Writing metadata for ${index + 1} of ${totalCountLabel} files...`,
+        );
+
+        try {
+          const formData = new FormData();
+          formData.append("fileSize", String(file.size));
+          formData.append("tags", value);
+          formData.append("file", file);
+
+          const response = await fetch("/api/media/tag", {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!response.ok) {
+            const responseError = await readErrorMessage(response);
+            throw new Error(responseError);
+          }
+
+          const confirmedTagsHeader = response.headers.get(
+            "x-media-tagger-confirmed-tags",
+          );
+
+          if (confirmedTagsHeader) {
+            try {
+              nextConfirmedTagGroups.push({
+                sourceFilename: file.name,
+                tags: JSON.parse(confirmedTagsHeader) as string[],
+              });
+            } catch {
+              // ignore invalid header payloads
+            }
+          }
+
+          const blob = await response.blob();
+          const downloadFilename =
+            getFilenameFromContentDisposition(
+              response.headers.get("content-disposition"),
+            ) ?? file.name;
+          const resolutionWarning = response.headers.get(
+            "x-media-tagger-file-resolution",
+          );
+
+          if (resolutionWarning) {
+            responseWarnings.add(resolutionWarning);
+          }
+
+          const completedDownload = {
+            id: `${file.name}-${downloadFilename}`,
+            blob,
+            downloadFilename,
+            sourceFilename: file.name,
+          };
+
+          setProcessedDownloads((previousDownloads) => {
+            if (
+              previousDownloads.some(
+                (previousDownload) =>
+                  previousDownload.id === completedDownload.id,
+              )
+            ) {
+              return previousDownloads;
+            }
+
+            return [...previousDownloads, completedDownload];
+          });
+
+          triggerDownload(blob, downloadFilename);
+          downloadedFilenames.push(downloadFilename);
+        } catch (error) {
+          failures.push({
+            file: file.name,
+            message:
+              error instanceof Error
+                ? error.message
+                : "Upload failed unexpectedly.",
+          });
+        }
+      }
+
+      if (failures.length > 0) {
+        setErrorMessage(formatFailureMessage(failures));
+      }
+
+      if (responseWarnings.size > 0) {
+        setWarningMessages((previousWarnings) =>
+          resetResults
+            ? Array.from(responseWarnings)
+            : Array.from(new Set([...previousWarnings, ...responseWarnings])),
+        );
+      }
+
+      if (nextConfirmedTagGroups.length > 0) {
+        setConfirmedTagGroups((previousGroups) =>
+          resetResults
+            ? nextConfirmedTagGroups
+            : [...previousGroups, ...nextConfirmedTagGroups],
+        );
+      }
+
+      if (downloadedFilenames.length === 0) {
+        setStatus("Request failed.");
+        return { downloadedFilenames, failures };
+      }
+
+      setStatus(
+        options?.successStatus
+          ? options.successStatus(downloadedFilenames)
+          : downloadedFilenames.length === 1 && failures.length === 0
+            ? `Downloaded ${downloadedFilenames[0]}.`
+            : `Downloaded ${downloadedFilenames.length} of ${totalCountLabel} files.`,
+      );
+
+      return { downloadedFilenames, failures };
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  function renderMediaPreview(
+    file: File,
+    options?: { allowVideoPreview?: boolean },
+  ) {
+    const previewUrl = previewUrls[buildFileId(file)] ?? null;
+    const showVideoPreview =
+      (options?.allowVideoPreview ?? true) && isVideoFile(file) && previewUrl;
+
+    return (
+      <div className="preview-frame">
+        {showVideoPreview ? (
+          <video
+            aria-label={`Preview of ${file.name}`}
+            className="preview-image"
+            muted
+            playsInline
+            preload="metadata"
+            src={previewUrl}
+          />
+        ) : previewUrl ? (
+          <img
+            alt={`Preview of ${file.name}`}
+            className="preview-image"
+            src={previewUrl}
+          />
+        ) : (
+          <div
+            className="preview-placeholder"
+            aria-label={`No preview available for ${file.name}`}
+          >
+            <span>{formatPreviewLabel(file)}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   function handleManualDownload(download: ProcessedDownload) {
     triggerDownload(download.blob, download.downloadFilename);
     setStatus(`Manual download started for ${download.downloadFilename}.`);
@@ -160,164 +438,41 @@ export default function App() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (selectedFiles.length === 0) {
-      setErrorMessage("Choose at least one file before submitting.");
+    const tagAssignments = getTagAssignments(selectedFiles);
+    const validationError = validateTagAssignments(tagAssignments, tagMode);
+
+    if (validationError) {
+      setErrorMessage(validationError);
       return;
     }
 
-    const tagAssignments = selectedFiles.map((file) => ({
-      file,
-      value:
-        tagMode === "shared" ? tags : (perFileTags[buildFileId(file)] ?? ""),
-    }));
+    await processTagAssignments(tagAssignments, {
+      resetResults: true,
+      totalCountLabel: selectedFiles.length,
+    });
+  }
 
-    if (tagMode === "shared" && !tags.trim()) {
-      setErrorMessage("Enter at least one tag.");
-      return;
-    }
-
-    const missingTagsAssignment = tagAssignments.find(
-      ({ value }) => !value.trim(),
+  async function handleSingleFileSubmit(file: File) {
+    const tagAssignments = getTagAssignments([file], "individual");
+    const validationError = validateTagAssignments(
+      tagAssignments,
+      "individual",
     );
 
-    if (missingTagsAssignment) {
-      setErrorMessage(
-        tagMode === "shared"
-          ? "Enter at least one tag."
-          : `Enter at least one tag for ${missingTagsAssignment.file.name}.`,
-      );
+    if (validationError) {
+      setErrorMessage(validationError);
       return;
     }
 
-    if (
-      serverConfig &&
-      selectedFiles.some((file) => file.size > serverConfig.maxUploadBytes)
-    ) {
-      setErrorMessage(
-        `Choose files no larger than ${formatBytes(serverConfig.maxUploadBytes)}.`,
-      );
-      return;
-    }
+    const result = await processTagAssignments(tagAssignments, {
+      resetResults: false,
+      totalCountLabel: 1,
+      successStatus: (downloadedFilenames) =>
+        `Downloaded ${downloadedFilenames[0] ?? file.name} and removed ${file.name} from the queue.`,
+    });
 
-    setIsSubmitting(true);
-    setErrorMessage(null);
-    setProcessedDownloads([]);
-    setWarningMessages([]);
-    setConfirmedTagGroups([]);
-
-    const failures: Array<{ file: string; message: string }> = [];
-    const downloadedFilenames: string[] = [];
-    const responseWarnings = new Set<string>();
-    const nextConfirmedTagGroups: ConfirmedTagGroup[] = [];
-
-    try {
-      for (const [index, assignment] of tagAssignments.entries()) {
-        const { file, value } = assignment;
-
-        setStatus(
-          selectedFiles.length === 1
-            ? `Writing metadata for ${file.name}...`
-            : `Writing metadata for ${index + 1} of ${selectedFiles.length} files...`,
-        );
-
-        try {
-          const formData = new FormData();
-          formData.append("fileSize", String(file.size));
-          formData.append("tags", value);
-          formData.append("file", file);
-
-          const response = await fetch("/api/media/tag", {
-            method: "POST",
-            body: formData,
-          });
-
-          if (!response.ok) {
-            const responseError = await readErrorMessage(response);
-            throw new Error(responseError);
-          }
-
-          const confirmedTagsHeader = response.headers.get(
-            "x-media-tagger-confirmed-tags",
-          );
-
-          if (confirmedTagsHeader) {
-            try {
-              nextConfirmedTagGroups.push({
-                sourceFilename: file.name,
-                tags: JSON.parse(confirmedTagsHeader) as string[],
-              });
-            } catch {
-              // ignore invalid header payloads
-            }
-          }
-
-          const blob = await response.blob();
-          const downloadFilename =
-            getFilenameFromContentDisposition(
-              response.headers.get("content-disposition"),
-            ) ?? file.name;
-          const resolutionWarning = response.headers.get(
-            "x-media-tagger-file-resolution",
-          );
-
-          if (resolutionWarning) {
-            responseWarnings.add(resolutionWarning);
-          }
-
-          const completedDownload = {
-            id: `${index}-${file.name}-${downloadFilename}`,
-            blob,
-            downloadFilename,
-            sourceFilename: file.name,
-          };
-
-          setProcessedDownloads((previousDownloads) => {
-            if (
-              previousDownloads.some(
-                (previousDownload) =>
-                  previousDownload.id === completedDownload.id,
-              )
-            ) {
-              return previousDownloads;
-            }
-
-            return [...previousDownloads, completedDownload];
-          });
-          triggerDownload(blob, downloadFilename);
-          downloadedFilenames.push(downloadFilename);
-        } catch (error) {
-          failures.push({
-            file: file.name,
-            message:
-              error instanceof Error
-                ? error.message
-                : "Upload failed unexpectedly.",
-          });
-        }
-      }
-
-      if (failures.length > 0) {
-        setErrorMessage(formatFailureMessage(failures));
-      }
-
-      setWarningMessages(Array.from(responseWarnings));
-
-      if (nextConfirmedTagGroups.length > 0) {
-        setConfirmedTagGroups(nextConfirmedTagGroups);
-      }
-
-      if (downloadedFilenames.length === 0) {
-        setStatus("Request failed.");
-        return;
-      }
-
-      setStatus(
-        downloadedFilenames.length === 1 && failures.length === 0
-          ? `Downloaded ${downloadedFilenames[0]}.`
-          : `Downloaded ${downloadedFilenames.length} of ${selectedFiles.length} files.`,
-      );
-    } finally {
-      setIsSubmitting(false);
+    if (result.downloadedFilenames.length > 0 && result.failures.length === 0) {
+      removeQueuedFile(file, true);
     }
   }
 
@@ -389,18 +544,6 @@ export default function App() {
                 {formatSelectedFileSummary(selectedFiles)}
               </span>
             </span>
-            {selectedFiles.length > 0 ? (
-              <span className="selected-file-list" aria-live="polite">
-                {selectedFiles.map((file) => (
-                  <span
-                    className="selected-file-item"
-                    key={`${file.name}-${file.size}`}
-                  >
-                    {file.name}
-                  </span>
-                ))}
-              </span>
-            ) : null}
             <input
               id="media-file"
               accept={ACCEPTED_FILE_TYPES}
@@ -450,6 +593,42 @@ export default function App() {
                 Separate tags with commas, new lines, or use <code>|</code> for
                 expansion. Duplicate tags are removed.
               </span>
+              {selectedFiles.length > 0 ? (
+                <div
+                  className="shared-preview-list"
+                  aria-label="Selected files"
+                >
+                  {selectedFiles.map((file) => (
+                    <article
+                      className="shared-preview-item"
+                      key={buildFileId(file)}
+                    >
+                      {renderMediaPreview(file, { allowVideoPreview: false })}
+                      <div className="shared-preview-copy">
+                        <span
+                          className="field-value individual-tag-filename"
+                          title={file.name}
+                        >
+                          {file.name}
+                        </span>
+                        <button
+                          aria-label={`Remove ${file.name}`}
+                          className="secondary-button"
+                          disabled={isSubmitting}
+                          onClick={() => removeQueuedFile(file)}
+                          type="button"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <span className="field-value">
+                  Choose files to preview and tag.
+                </span>
+              )}
               <textarea
                 id="media-tags"
                 className="tags-input"
@@ -473,50 +652,28 @@ export default function App() {
                 <div className="individual-tags-list">
                   {selectedFiles.map((file) => {
                     const fileId = buildFileId(file);
-                    const previewUrl = previewUrls[fileId] ?? null;
                     const copiedFromLabel = copiedFromFilename
                       ? `Paste copied tags from ${copiedFromFilename}`
                       : "Paste copied tags";
-                    const showVideoPreview = isVideoFile(file) && previewUrl;
 
                     return (
                       <article className="individual-tag-item" key={fileId}>
-                        <div className="preview-frame">
-                          {showVideoPreview ? (
-                            <video
-                              aria-label={`Preview of ${file.name}`}
-                              className="preview-image"
-                              muted
-                              playsInline
-                              preload="metadata"
-                              src={previewUrl}
-                            />
-                          ) : previewUrl ? (
-                            <img
-                              alt={`Preview of ${file.name}`}
-                              className="preview-image"
-                              src={previewUrl}
-                            />
-                          ) : (
-                            <div
-                              className="preview-placeholder"
-                              aria-label={`No preview available for ${file.name}`}
-                            >
-                              <span>{formatPreviewLabel(file)}</span>
-                            </div>
-                          )}
-                        </div>
+                        {renderMediaPreview(file)}
                         <div className="individual-tag-copy">
-                          <span className="field-value individual-tag-filename">
+                          <span
+                            className="field-value individual-tag-filename"
+                            title={file.name}
+                          >
                             {file.name}
                           </span>
                           <label
                             className="individual-tag-label"
                             htmlFor={`media-tags-${fileId}`}
                           >
-                            Tags for {file.name}
+                            Tags
                           </label>
                           <textarea
+                            aria-label={`Tags for ${file.name}`}
                             id={`media-tags-${fileId}`}
                             className="tags-input individual-tags-input"
                             onChange={(event) =>
@@ -532,6 +689,7 @@ export default function App() {
                           <div className="individual-tag-actions">
                             <button
                               className="secondary-button"
+                              disabled={isSubmitting}
                               onClick={() => handleCopyTags(file)}
                               type="button"
                             >
@@ -539,11 +697,29 @@ export default function App() {
                             </button>
                             <button
                               className="secondary-button"
-                              disabled={copiedTags === null}
+                              disabled={copiedTags === null || isSubmitting}
                               onClick={() => handlePasteTags(file)}
                               type="button"
                             >
                               {copiedFromLabel}
+                            </button>
+                            <button
+                              aria-label={`Tag and download ${file.name}`}
+                              className="secondary-button"
+                              disabled={isSubmitting}
+                              onClick={() => void handleSingleFileSubmit(file)}
+                              type="button"
+                            >
+                              Tag and download
+                            </button>
+                            <button
+                              aria-label={`Remove ${file.name}`}
+                              className="secondary-button"
+                              disabled={isSubmitting}
+                              onClick={() => removeQueuedFile(file)}
+                              type="button"
+                            >
+                              Remove
                             </button>
                           </div>
                         </div>
@@ -575,7 +751,7 @@ export default function App() {
             disabled={isSubmitting}
             type="submit"
           >
-            {isSubmitting ? "Writing metadata..." : "Tag and download files"}
+            {isSubmitting ? "Writing metadata..." : "Tag all and download"}
           </button>
 
           {visibleConfirmedTagGroups.length > 0 ? (
