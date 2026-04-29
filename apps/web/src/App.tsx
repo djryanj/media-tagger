@@ -88,7 +88,7 @@ export default function App() {
     const nextPreviewUrls: Record<string, string> = {};
 
     for (const file of selectedFiles) {
-      if (!file.type.startsWith("image/")) {
+      if (!isPreviewableFile(file)) {
         continue;
       }
 
@@ -477,11 +477,21 @@ export default function App() {
                     const copiedFromLabel = copiedFromFilename
                       ? `Paste copied tags from ${copiedFromFilename}`
                       : "Paste copied tags";
+                    const showVideoPreview = isVideoFile(file) && previewUrl;
 
                     return (
                       <article className="individual-tag-item" key={fileId}>
                         <div className="preview-frame">
-                          {previewUrl ? (
+                          {showVideoPreview ? (
+                            <video
+                              aria-label={`Preview of ${file.name}`}
+                              className="preview-image"
+                              muted
+                              playsInline
+                              preload="metadata"
+                              src={previewUrl}
+                            />
+                          ) : previewUrl ? (
                             <img
                               alt={`Preview of ${file.name}`}
                               className="preview-image"
@@ -490,7 +500,7 @@ export default function App() {
                           ) : (
                             <div
                               className="preview-placeholder"
-                              aria-label={`No image preview for ${file.name}`}
+                              aria-label={`No preview available for ${file.name}`}
                             >
                               <span>{formatPreviewLabel(file)}</span>
                             </div>
@@ -776,6 +786,18 @@ function stripTrailingZeroes(value: string): string {
 
 function buildFileId(file: File): string {
   return `${file.name}-${file.size}-${file.lastModified}`;
+}
+
+function isPreviewableFile(file: File): boolean {
+  return isImageFile(file) || isVideoFile(file);
+}
+
+function isImageFile(file: File): boolean {
+  return file.type.startsWith("image/");
+}
+
+function isVideoFile(file: File): boolean {
+  return file.type.startsWith("video/");
 }
 
 function buildPerFileTagMap(
