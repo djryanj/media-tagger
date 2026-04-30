@@ -35,12 +35,15 @@ textarea {
 
 .app-panel {
   width: min(100%, 42rem);
+  min-width: 0;
+  max-width: 100%;
   margin: 0 auto;
   padding: 20px;
   border: 1px solid #d3d3d3;
   border-radius: 16px;
   background: #f8f8f8;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
 }
 
 .panel-header {
@@ -73,6 +76,8 @@ h1 {
   display: grid;
   gap: 14px;
   margin-top: 20px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .field-card,
@@ -83,6 +88,9 @@ h1 {
   border: 1px solid #d6d6d6;
   border-radius: 12px;
   background: #ffffff;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .mode-card {
@@ -119,6 +127,7 @@ h1 {
   grid-template-columns: auto 1fr;
   gap: 12px;
   align-items: center;
+  min-width: 0;
 }
 
 .file-picker-button {
@@ -136,6 +145,8 @@ h1 {
 
 .file-name {
   min-width: 0;
+  max-width: 100%;
+  width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -179,6 +190,8 @@ h1 {
 .shared-preview-list {
   display: grid;
   gap: 12px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .shared-preview-item {
@@ -188,12 +201,19 @@ h1 {
   border: 1px solid #d6d6d6;
   border-radius: 12px;
   background: #fafafa;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .shared-preview-copy {
   display: grid;
   gap: 8px;
   min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  overflow: hidden;
 }
 
 .mode-options {
@@ -249,6 +269,8 @@ h1 {
 .individual-tags-list {
   display: grid;
   gap: 12px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .individual-tag-item {
@@ -258,6 +280,10 @@ h1 {
   border: 1px solid #d6d6d6;
   border-radius: 12px;
   background: #fafafa;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .preview-frame {
@@ -265,9 +291,12 @@ h1 {
   align-items: center;
   justify-content: center;
   min-height: 7.5rem;
+  min-width: 0;
   border: 1px solid #d6d6d6;
   border-radius: 10px;
   overflow: hidden;
+  width: 100%;
+  max-width: 100%;
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(233, 236, 240, 0.94)),
     repeating-linear-gradient(
@@ -281,10 +310,12 @@ h1 {
 
 .preview-image {
   display: block;
-  width: 100%;
-  height: 100%;
+  max-width: 100%;
+  width: auto;
+  height: auto;
   max-height: 11rem;
   object-fit: cover;
+  margin: 0 auto;
 }
 
 .preview-placeholder {
@@ -305,15 +336,21 @@ h1 {
   display: grid;
   gap: 8px;
   min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  overflow: hidden;
 }
 
 .individual-tag-filename {
   display: block;
   min-width: 0;
+  max-width: 100%;
+  width: 100%;
   font-weight: 700;
   color: #1f1f1f;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap !important;
 }
 
 .individual-tag-label {
@@ -330,6 +367,15 @@ h1 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.individual-tag-actions .secondary-button {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .submit-button {
@@ -367,10 +413,10 @@ h1 {
 
 .download-results {
   display: grid;
-  gap: 12px;
-  margin-top: 18px;
-  padding-top: 18px;
-  border-top: 1px solid #d6d6d6;
+  gap: 8px;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  width: 100% !important;
 }
 
 .download-results-header {
@@ -385,10 +431,10 @@ h1 {
 
 .download-result-list {
   display: grid;
-  gap: 10px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  gap: 8px;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  width: 100% !important;
 }
 
 .download-result-item {
@@ -423,6 +469,13 @@ h1 {
   padding-top: 18px;
   border-top: 1px solid #d6d6d6;
   color: #4a4a4a;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.status-strip span {
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .status-error {
@@ -462,6 +515,8 @@ h1 {
   display: grid;
   gap: 0.5em;
   max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .confirmed-tags-groups {
@@ -491,6 +546,7 @@ h1 {
 .download-result-name {
   display: block;
   max-width: 100%;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
