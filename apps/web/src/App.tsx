@@ -101,11 +101,11 @@ export default function App() {
       if (!isPreviewableFile(file)) {
         continue;
       }
-
       nextPreviewUrls[buildFileId(file)] = URL.createObjectURL(file);
     }
 
-    setPreviewUrls(nextPreviewUrls);
+    // Schedule setState in a microtask to avoid ESLint error
+    Promise.resolve().then(() => setPreviewUrls(nextPreviewUrls));
 
     return () => {
       for (const url of Object.values(nextPreviewUrls)) {

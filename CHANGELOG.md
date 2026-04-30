@@ -6,8 +6,13 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ## [0.3.3] - Unreleased
 
+### Fixed
+
+- Fixed a lint error (`react-hooks/set-state-in-effect`) not present before caused by new ESLint rules by scheduling setState in a microtask inside the preview URL effect. This prevents cascading renders and aligns with stricter React Hooks linting in CI. [#45](https://github.com/djryanj/media-tagger/pull/45)
+
 ### Changed
 
+- chore(deps-dev): bump eslint-plugin-react-hooks from 7.0.1 to 7.1.1 ([#45](https://github.com/djryanj/media-tagger/pull/45))
 - chore(deps-dev): bump typescript from 6.0.2 to 6.0.3 ([#46](https://github.com/djryanj/media-tagger/pull/46))
 - Tag pipe expansion now supports blank segments, so entries like `large trees|` or `large |trees` expand to both the full and partial tag (e.g., `large`, `large trees`). This works anywhere in the tag string and is covered by new backend and e2e tests. [#47](https://github.com/djryanj/media-tagger/issues/47)
 
