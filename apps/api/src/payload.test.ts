@@ -3,6 +3,36 @@ import { describe, expect, it } from "vitest";
 import { normalizeTags, renderPayload } from "./tags.js";
 
 describe("tag payload helpers", () => {
+  it("expands blank pipe segments as omission anywhere in the tag", () => {
+    expect(normalizeTags("large trees|")).toEqual([
+      "large",
+      "large trees",
+    ]);
+    expect(normalizeTags("large |trees")).toEqual([
+      "large",
+      "large trees",
+    ]);
+    expect(normalizeTags("|trees")).toEqual([
+      "trees"
+    ]);
+    expect(normalizeTags("big|huge |trees")).toEqual([
+      "big",
+      "huge",
+      "big trees",
+      "huge trees"
+    ]);
+    expect(normalizeTags("|big|huge trees")).toEqual([
+      "trees",
+      "big trees",
+      "huge trees"
+    ]);
+    expect(normalizeTags("big|huge trees| ")).toEqual([
+      "big",
+      "huge",
+      "big trees",
+      "huge trees"
+    ]);
+  });
 
   it("normalizes whitespace and removes duplicates", () => {
     expect(normalizeTags(" cats, dogs ,Cats\nsmall   birds ")).toEqual([

@@ -3,6 +3,24 @@ import { test, expect } from '@playwright/test';
 
 
 test.describe('Tag chips and download UI', () => {
+    test('shows confirmed tag chips after upload with blank pipe expansion', async ({ page }) => {
+      await page.goto('/');
+      const submitButton = page.getByRole('button', {
+        name: 'Tag all and download',
+      });
+      // Upload a file
+      await page.setInputFiles('input[type="file"]', 'e2e/fixtures/sample.jpg');
+      // Enter tags with blank pipe expansion
+      await page.fill('textarea#media-tags', 'large trees|, large |trees');
+      // Chips should not be visible before upload
+      await expect(page.locator('.confirmed-tags-block')).toHaveCount(0);
+      // Submit
+      await submitButton.click({ force: true });
+      // Wait for chips to appear
+      await expect(page.locator('.confirmed-tags-block')).toBeVisible();
+      await expect(page.getByText('large', { exact: true })).toBeVisible();
+      await expect(page.locator('.tag-chip', { hasText: 'large trees' })).toBeVisible();
+    });
   test('shows confirmed tag chips after upload with pipe expansion', async ({ page }) => {
     await page.goto('/');
     const submitButton = page.getByRole('button', {

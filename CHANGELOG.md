@@ -6,6 +6,10 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ## [0.3.3] - Unreleased
 
+### Changed
+
+- Tag pipe expansion now supports blank segments, so entries like `large trees|` or `large |trees` expand to both the full and partial tag (e.g., `large`, `large trees`). This works anywhere in the tag string and is covered by new backend and e2e tests. [#47](https://github.com/djryanj/media-tagger/issues/47)
+
 ### Fixed
 
 - Long filenames no longer cause horizontal overflow on small mobile viewports (e.g., Galaxy S20 FE). Every container in the grid ancestry chain — from `.app-panel` down through `.field-card`, `.individual-tag-item`, `.shared-preview-item`, `.individual-tag-copy`, `.shared-preview-copy`, `.file-picker-row`, `.individual-tag-actions`, and `.status-strip` — now enforces `min-width: 0` and `overflow: hidden` so that `text-overflow: ellipsis` truncation activates correctly on filename elements. Action buttons with long dynamic labels (e.g., "Paste copied tags from …") are also truncated with ellipsis, and status strip warnings with long filenames soft-wrap instead of pushing the layout wider. [#48](https://github.com/djryanj/media-tagger/issues/48)
