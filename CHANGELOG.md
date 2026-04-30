@@ -12,6 +12,7 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ### Changed
 
+- chore(deps): bump renovatebot/github-action from 46.1.10 to 46.1.12 ([#41](https://github.com/djryanj/media-tagger/pull/41))
 - chore(deps-dev): bump vite from 8.0.8 to 8.0.10 ([#42](https://github.com/djryanj/media-tagger/pull/42))
 - chore(deps-dev): bump vitest from 4.1.4 to 4.1.5 ([#43](https://github.com/djryanj/media-tagger/pull/43))
 - chore(deps-dev): bump jsdom from 29.0.2 to 29.1.1 ([#44](https://github.com/djryanj/media-tagger/pull/44))
