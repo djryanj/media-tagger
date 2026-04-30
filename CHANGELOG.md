@@ -6,6 +6,11 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ## [0.3.2] - 2026-04-29
 
+
+### Changed
+
+- chore(deps-dev): bump vite from 8.0.8 to 8.0.10 ([#42](https://github.com/djryanj/media-tagger/pull/42))
+
 ### Added
 
 - Shared tagging mode now keeps per-file media previews visible and adds remove controls so files can be dropped from the queue before submission. [#38](https://github.com/djryanj/media-tagger/issues/38)
