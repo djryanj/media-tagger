@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project uses semantic version tags for releases.
 
+## [0.3.3] - Unreleased
+
+### Fixed
+
+- Long filenames no longer cause horizontal overflow on small mobile viewports (e.g., Galaxy S20 FE). Every container in the grid ancestry chain — from `.app-panel` down through `.field-card`, `.individual-tag-item`, `.shared-preview-item`, `.individual-tag-copy`, `.shared-preview-copy`, `.file-picker-row`, `.individual-tag-actions`, and `.status-strip` — now enforces `min-width: 0` and `overflow: hidden` so that `text-overflow: ellipsis` truncation activates correctly on filename elements. Action buttons with long dynamic labels (e.g., "Paste copied tags from …") are also truncated with ellipsis, and status strip warnings with long filenames soft-wrap instead of pushing the layout wider. [#48](https://github.com/djryanj/media-tagger/issues/48)
+
+### Added
+
+- Overflow containment regression tests that verify the full DOM ancestor chain carries the correct containment classes for long filenames in shared mode, individual mode, download results, status strip warnings, action button labels, and the file-picker summary row. [#48](https://github.com/djryanj/media-tagger/issues/48)
+
 ## [0.3.2] - 2026-04-29
 
 ### Added

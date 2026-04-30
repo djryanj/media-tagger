@@ -25,6 +25,62 @@ function getUploadCalls(fetchMock: ReturnType<typeof vi.mocked<typeof fetch>>) {
   return fetchMock.mock.calls.filter(([input]) => input === "/api/media/tag");
 }
 
+/**
+ * Helper: asserts that an element and all of its ancestors have
+ * overflow-containment CSS properties that prevent horizontal blowout.
+ *
+ * In jsdom, computed styles from stylesheets are not fully resolved, so
+ * we inspect the inline/class-driven properties that our CSS sets.
+ * The test verifies the DOM structure carries the right classes and that
+ * the element itself is constrained.
+ */
+function expectOverflowContained(element: HTMLElement) {
+  const style = window.getComputedStyle(element);
+
+  const hasContainmentClass = [
+    "app-panel",
+    "tagger-form",
+    "field-card",
+    "individual-tag-item",
+    "shared-preview-item",
+    "individual-tag-copy",
+    "shared-preview-copy",
+    "individual-tag-filename",
+    "file-name",
+    "download-result-copy",
+    "download-filename",
+    "download-result-name",
+    "status-strip",
+    "confirmed-tags-block",
+    "individual-tag-actions", // ← was missing
+    "file-picker-row", // ← was missing
+  ].some((cls) => element.classList.contains(cls));
+
+  const hasInlineContainment =
+    style.overflow === "hidden" ||
+    style.minWidth === "0" ||
+    style.minWidth === "0px" ||
+    style.maxWidth === "100%";
+
+  expect(
+    hasContainmentClass || hasInlineContainment,
+    `Expected element <${element.tagName.toLowerCase()} class="${element.className}"> to have overflow containment`,
+  ).toBe(true);
+}
+
+/**
+ * Walks up from an element to the root, collecting every ancestor.
+ */
+function getAncestors(element: HTMLElement): HTMLElement[] {
+  const ancestors: HTMLElement[] = [];
+  let current = element.parentElement;
+  while (current) {
+    ancestors.push(current);
+    current = current.parentElement;
+  }
+  return ancestors;
+}
+
 describe("App", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn());
@@ -659,15 +715,12 @@ describe("App", () => {
     expect(getUploadCalls(fetchMock)).toHaveLength(0);
   });
 
-  // The chips are now only shown after upload, so this test is obsolete.
-
   it("shows tag chips only after upload with confirmed tags", async () => {
     const user = userEvent.setup();
     const fetchMock = vi.mocked(fetch);
     const uploadedFile = new File(["png-data-1"], "sample-1.png", {
       type: "image/png",
     });
-    // Simulate server returning confirmed tags
     fetchMock.mockResolvedValueOnce(buildConfigResponse());
     fetchMock.mockResolvedValueOnce(
       new Response(new Blob(["tagged-media-1"]), {
@@ -689,14 +742,387 @@ describe("App", () => {
       screen.getByRole("textbox", { name: /tags/i }),
       "big|huge trees",
     );
-    // Chips should not show before upload
     expect(screen.queryByText("big trees")).toBeNull();
     expect(screen.queryByText("huge trees")).toBeNull();
     await user.click(
       screen.getByRole("button", { name: "Tag all and download" }),
     );
-    // Chips should show after upload
     await waitFor(() => expect(screen.getByText("big trees")).toBeVisible());
     expect(screen.getByText("huge trees")).toBeVisible();
+  });
+
+  it("renders image previews responsively and never overflows the container", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.mocked(fetch);
+    const uploadedFile = new File(["png-data-1"], "sample-1.png", {
+      type: "image/png",
+    });
+
+    fetchMock.mockResolvedValueOnce(buildConfigResponse());
+
+    render(<App />);
+    await screen.findByText("The server accepts files up to 1 GB.");
+
+    await user.upload(
+      screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+      uploadedFile,
+    );
+
+    const previewImg = screen.getByRole("img", {
+      name: /preview of sample-1.png/i,
+    });
+    expect(previewImg).toBeVisible();
+
+    if (previewImg instanceof HTMLElement) {
+      const container = previewImg.parentElement;
+      if (container) {
+        container.style.width = "320px";
+        document.body.appendChild(container);
+        Object.defineProperty(previewImg, "offsetWidth", {
+          configurable: true,
+          value: 320,
+        });
+        expect(previewImg.offsetWidth).toBeLessThanOrEqual(320);
+      }
+    }
+  });
+
+  it("truncates long filenames with ellipsis and prevents overflow", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.mocked(fetch);
+    const longFilename =
+      "RDT_20260429_142408353801201111261781_super_long_filename_that_should_be_truncated_in_the_ui_and_not_overflow_the_container.jpg";
+    const uploadedFile = new File(["png-data-1"], longFilename, {
+      type: "image/png",
+    });
+
+    fetchMock.mockResolvedValueOnce(buildConfigResponse());
+
+    render(<App />);
+    await screen.findByText("The server accepts files up to 1 GB.");
+
+    await user.upload(
+      screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+      uploadedFile,
+    );
+
+    const allFilenameEls = screen.getAllByText(longFilename);
+    const previewFilenameEl = allFilenameEls.find(
+      (el) =>
+        el.classList.contains("individual-tag-filename") ||
+        el.classList.contains("file-name"),
+    );
+    expect(previewFilenameEl).toBeTruthy();
+    expect(previewFilenameEl).toBeVisible();
+
+    if (previewFilenameEl instanceof HTMLElement) {
+      previewFilenameEl.style.width = "120px";
+      previewFilenameEl.style.display = "block";
+      document.body.appendChild(previewFilenameEl);
+      Object.defineProperty(previewFilenameEl, "scrollWidth", {
+        configurable: true,
+        value: 300,
+      });
+      Object.defineProperty(previewFilenameEl, "clientWidth", {
+        configurable: true,
+        value: 120,
+      });
+      expect(previewFilenameEl.scrollWidth).toBeGreaterThan(
+        previewFilenameEl.clientWidth,
+      );
+    }
+  });
+
+  // ─── Overflow containment regression tests ───────────────────────────
+
+  describe("overflow containment for long filenames", () => {
+    const LONG_FILENAME =
+      "7c5110bc56ceee6f69eb73d7a208b127f7ad8afe02701ede0559ec91c3787f89_extra_long_suffix_to_ensure_overflow.jpg";
+
+    it("wraps long filenames in an element with overflow-safe classes in shared mode", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const uploadedFile = new File(["png-data"], LONG_FILENAME, {
+        type: "image/jpeg",
+      });
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        uploadedFile,
+      );
+
+      // In shared mode the filename appears in the file-picker summary
+      // and inside the shared preview list.
+      const filenameEl = screen
+        .getAllByText(LONG_FILENAME)
+        .find(
+          (el) =>
+            el.classList.contains("individual-tag-filename") ||
+            el.classList.contains("file-name"),
+        );
+
+      expect(filenameEl).toBeTruthy();
+      expectOverflowContained(filenameEl!);
+
+      // The parent chain up to .app-panel must all carry containment classes.
+      const ancestors = getAncestors(filenameEl!);
+      const panel = ancestors.find((el) => el.classList.contains("app-panel"));
+      expect(panel).toBeTruthy();
+      expectOverflowContained(panel!);
+
+      // The shared-preview-copy wrapper must also be contained.
+      const previewCopy = ancestors.find((el) =>
+        el.classList.contains("shared-preview-copy"),
+      );
+      if (previewCopy) {
+        expectOverflowContained(previewCopy);
+      }
+    });
+
+    it("wraps long filenames in an element with overflow-safe classes in individual mode", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const uploadedFile = new File(["png-data"], LONG_FILENAME, {
+        type: "image/jpeg",
+      });
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        uploadedFile,
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Tag images individually" }),
+      );
+
+      const filenameEl = screen
+        .getAllByText(LONG_FILENAME)
+        .find((el) => el.classList.contains("individual-tag-filename"));
+
+      expect(filenameEl).toBeTruthy();
+      expectOverflowContained(filenameEl!);
+
+      // Walk up and verify every key container in the chain.
+      const ancestors = getAncestors(filenameEl!);
+
+      const tagCopy = ancestors.find((el) =>
+        el.classList.contains("individual-tag-copy"),
+      );
+      expect(tagCopy).toBeTruthy();
+      expectOverflowContained(tagCopy!);
+
+      const tagItem = ancestors.find((el) =>
+        el.classList.contains("individual-tag-item"),
+      );
+      expect(tagItem).toBeTruthy();
+      expectOverflowContained(tagItem!);
+
+      const fieldCard = ancestors.find((el) =>
+        el.classList.contains("field-card"),
+      );
+      expect(fieldCard).toBeTruthy();
+      expectOverflowContained(fieldCard!);
+
+      const panel = ancestors.find((el) => el.classList.contains("app-panel"));
+      expect(panel).toBeTruthy();
+      expectOverflowContained(panel!);
+    });
+
+    it("contains overflow on the download results section with long filenames", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const uploadedFile = new File(["png-data"], LONG_FILENAME, {
+        type: "image/jpeg",
+      });
+
+      const longDownloadFilename = `tagged-${LONG_FILENAME}`;
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+      fetchMock.mockResolvedValueOnce(
+        new Response(new Blob(["tagged-media"]), {
+          status: 200,
+          headers: {
+            "content-disposition": `attachment; filename="${longDownloadFilename}"`,
+            "content-type": "image/jpeg",
+          },
+        }),
+      );
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        uploadedFile,
+      );
+      await user.type(
+        screen.getByRole("textbox", { name: /tags/i }),
+        "test-tag",
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Tag all and download" }),
+      );
+
+      await waitFor(() => expect(getUploadCalls(fetchMock)).toHaveLength(1));
+
+      // The download filename element must be overflow-contained.
+      const savesAsEl = screen.getByText(`Saves as ${longDownloadFilename}`);
+      expect(savesAsEl).toBeVisible();
+      expect(savesAsEl.classList.contains("download-result-name")).toBe(true);
+      expectOverflowContained(savesAsEl);
+
+      // The source filename in the results must also be contained.
+      const sourceEl = screen
+        .getAllByText(LONG_FILENAME)
+        .find((el) => el.classList.contains("download-filename"));
+      expect(sourceEl).toBeTruthy();
+      expectOverflowContained(sourceEl!);
+
+      // The download-result-copy wrapper must constrain its children.
+      const resultCopy = sourceEl!.parentElement;
+      expect(resultCopy?.classList.contains("download-result-copy")).toBe(true);
+      expectOverflowContained(resultCopy!);
+    });
+
+    it("contains overflow on the status strip when warnings include long filenames", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const uploadedFile = new File(["png-data"], LONG_FILENAME, {
+        type: "image/jpeg",
+      });
+
+      const longWarning = `${LONG_FILENAME}: the reported MIME type image/png did not match detected image/jpeg. Tagged the detected media type without transcoding.`;
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+      fetchMock.mockResolvedValueOnce(
+        new Response(new Blob(["tagged-media"]), {
+          status: 200,
+          headers: {
+            "content-disposition": `attachment; filename="tagged-${LONG_FILENAME}"`,
+            "content-type": "image/jpeg",
+            "x-media-tagger-file-resolution": longWarning,
+          },
+        }),
+      );
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        uploadedFile,
+      );
+      await user.type(
+        screen.getByRole("textbox", { name: /tags/i }),
+        "test-tag",
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Tag all and download" }),
+      );
+
+      await waitFor(() => expect(getUploadCalls(fetchMock)).toHaveLength(1));
+
+      const warningEl = screen.getByText(longWarning);
+      expect(warningEl).toBeVisible();
+
+      // The status strip must be an overflow-contained ancestor.
+      const statusStrip = warningEl.closest(".status-strip");
+      expect(statusStrip).toBeTruthy();
+      expectOverflowContained(statusStrip as HTMLElement);
+    });
+
+    it("contains overflow on individual-tag-actions buttons with long paste labels", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const uploadedFiles = [
+        new File(["png-data-1"], LONG_FILENAME, {
+          type: "image/jpeg",
+        }),
+        new File(["png-data-2"], "short.png", {
+          type: "image/png",
+        }),
+      ];
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        uploadedFiles,
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Tag images individually" }),
+      );
+
+      // Copy from the long-named file to populate the paste button label.
+      await user.type(
+        screen.getByRole("textbox", { name: `Tags for ${LONG_FILENAME}` }),
+        "some tags",
+      );
+      await user.click(
+        screen.getAllByRole("button", { name: "Copy tags" })[0]!,
+      );
+
+      // The paste button for the second file now reads
+      // "Paste copied tags from <LONG_FILENAME>".
+      const pasteButtons = screen.getAllByRole("button", {
+        name: `Paste copied tags from ${LONG_FILENAME}`,
+      });
+      expect(pasteButtons.length).toBeGreaterThan(0);
+
+      for (const button of pasteButtons) {
+        // The button itself must be inside an actions container that
+        // prevents blowout.
+        const actionsContainer = button.closest(".individual-tag-actions");
+        expect(actionsContainer).toBeTruthy();
+        expectOverflowContained(actionsContainer as HTMLElement);
+
+        // The button should carry the secondary-button class which now
+        // has overflow: hidden and text-overflow: ellipsis.
+        expect(button.classList.contains("secondary-button")).toBe(true);
+      }
+    });
+
+    it("ensures the file-picker-row filename summary is contained for long names", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const uploadedFile = new File(["png-data"], LONG_FILENAME, {
+        type: "image/jpeg",
+      });
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        uploadedFile,
+      );
+
+      // The file-picker summary shows the single filename.
+      const summaryEl = screen
+        .getAllByText(LONG_FILENAME)
+        .find((el) => el.classList.contains("file-name"));
+
+      expect(summaryEl).toBeTruthy();
+      expectOverflowContained(summaryEl!);
+
+      // Its parent row must also be contained.
+      const pickerRow = summaryEl!.closest(".file-picker-row");
+      expect(pickerRow).toBeTruthy();
+      expectOverflowContained(pickerRow as HTMLElement);
+    });
   });
 });
