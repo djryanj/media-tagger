@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project uses semantic version tags for releases.
 
+## [0.3.4] - Unreleased
+
+### Fixed
+
+- Video (MP4/MOV) previews now render correctly in the file selection list and shared preview mode, even when the browser does not set the MIME type. [#52](https://github.com/djryanj/media-tagger/issues/52)
+
 ## [0.3.3] - 2026-04-30
 
 ### Fixed
