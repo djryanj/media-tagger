@@ -633,7 +633,7 @@ export default function App() {
                 id="media-tags"
                 className="tags-input"
                 onChange={(event) => setTags(event.target.value)}
-                placeholder="forest, big|huge trees, sunrise"
+                placeholder="forest, big|huge trees, large trees|, large |trees, sunrise"
                 rows={4}
                 value={tags}
               />
@@ -682,7 +682,7 @@ export default function App() {
                                 event.target.value,
                               )
                             }
-                            placeholder="forest, big|huge trees, sunrise"
+                            placeholder="forest, big|huge trees, large trees|, large |trees, sunrise"
                             rows={3}
                             value={perFileTags[fileId] ?? ""}
                           />

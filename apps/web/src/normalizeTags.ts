@@ -7,11 +7,16 @@ function expandTagPipes(tag: string): string[] {
   if (!tag.includes("|")) return [tag];
   const parts: string[][] = tag.split(/\s+/).map((part: string) => part.split("|"));
   function cartesian(arr: string[][]): string[] {
-    return arr.reduce(
+    const combos = arr.reduce(
       (acc: string[][], curr: string[]) =>
         acc.flatMap((a: string[]) => curr.map((b: string) => a.concat([b]))),
       [[]] as string[][]
-    ).map((words: string[]) => words.join(" ").replace(/\s+/g, " ").trim());
+    );
+    // Sort so that tags with more omitted (blank) segments come first
+    return combos
+      .map((words: string[]) => words.filter(Boolean).join(" ").replace(/\s+/g, " ").trim())
+      .filter(Boolean)
+      .sort((a, b) => a.split(" ").length - b.split(" ").length);
   }
   return cartesian(parts);
 }
