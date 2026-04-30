@@ -219,7 +219,7 @@ prepare-release: _check-version
 	@echo "Release branch ready. Next steps:"
 	@echo "  1. Open a PR: release/$(VERSION_TAG) -> main"
 	@echo "  2. Merge the PR"
-	@echo "  3. git checkout main && git pull --ff-only origin main"
+	@echo "  3. git checkout main && git pull --ff-only origin main && git branch -d release/$(VERSION_TAG)"
 	@echo "  4. make tag-release VERSION=$(VERSION_TAG)"
 
 prepare-release-check: _check-version
