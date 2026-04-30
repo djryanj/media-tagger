@@ -355,8 +355,9 @@ export default function App() {
     options?: { allowVideoPreview?: boolean },
   ) {
     const previewUrl = previewUrls[buildFileId(file)] ?? null;
+    const videoDetected = isVideoFile(file);
     const showVideoPreview =
-      (options?.allowVideoPreview ?? true) && isVideoFile(file) && previewUrl;
+      (options?.allowVideoPreview ?? true) && videoDetected && previewUrl;
 
     return (
       <div className="preview-frame">
@@ -603,7 +604,7 @@ export default function App() {
                       className="shared-preview-item"
                       key={buildFileId(file)}
                     >
-                      {renderMediaPreview(file, { allowVideoPreview: false })}
+                      {renderMediaPreview(file, { allowVideoPreview: true })}
                       <div className="shared-preview-copy">
                         <span
                           className="field-value individual-tag-filename"
@@ -973,7 +974,10 @@ function isImageFile(file: File): boolean {
 }
 
 function isVideoFile(file: File): boolean {
-  return file.type.startsWith("video/");
+  // Accept if browser detects as video/* or if extension is .mp4 or .mov
+  if (file.type.startsWith("video/")) return true;
+  const ext = file.name.split(".").pop()?.toLowerCase();
+  return ext === "mp4" || ext === "mov";
 }
 
 function buildPerFileTagMap(

@@ -1,7 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
 import App from "./App";
 
 function buildConfigResponse(limitBytes = 512 * 1024 * 1024) {
@@ -22,7 +21,7 @@ function buildConfigResponse(limitBytes = 512 * 1024 * 1024) {
 }
 
 function getUploadCalls(fetchMock: ReturnType<typeof vi.mocked<typeof fetch>>) {
-  return fetchMock.mock.calls.filter(([input]) => input === "/api/media/tag");
+  return fetchMock.mock.calls.filter((call) => call[0] === "/api/media/tag");
 }
 
 /**
@@ -52,8 +51,8 @@ function expectOverflowContained(element: HTMLElement) {
     "download-result-name",
     "status-strip",
     "confirmed-tags-block",
-    "individual-tag-actions", // ← was missing
-    "file-picker-row", // ← was missing
+    "individual-tag-actions",
+    "file-picker-row",
   ].some((cls) => element.classList.contains(cls));
 
   const hasInlineContainment =
@@ -73,7 +72,7 @@ function expectOverflowContained(element: HTMLElement) {
  */
 function getAncestors(element: HTMLElement): HTMLElement[] {
   const ancestors: HTMLElement[] = [];
-  let current = element.parentElement;
+  let current: HTMLElement | null = element.parentElement;
   while (current) {
     ancestors.push(current);
     current = current.parentElement;
@@ -94,6 +93,28 @@ describe("App", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it("shows a video preview for mp4 files in shared mode", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(buildConfigResponse());
+    const uploadedFile = new File(["mp4-data"], "sample.mp4", {
+      type: "video/mp4",
+    });
+
+    render(<App />);
+    await screen.findByText("The server accepts files up to 1 GB.");
+
+    await user.upload(
+      screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+      uploadedFile,
+    );
+
+    // Should render a <video> element with the correct aria-label
+    const video = screen.getByLabelText("Preview of sample.mp4");
+    expect(video).toBeVisible();
+    expect(video.tagName.toLowerCase()).toBe("video");
   });
 
   it("requires a file and tags before submitting", async () => {
@@ -808,7 +829,7 @@ describe("App", () => {
 
     const allFilenameEls = screen.getAllByText(longFilename);
     const previewFilenameEl = allFilenameEls.find(
-      (el) =>
+      (el: HTMLElement) =>
         el.classList.contains("individual-tag-filename") ||
         el.classList.contains("file-name"),
     );
@@ -861,7 +882,7 @@ describe("App", () => {
       const filenameEl = screen
         .getAllByText(LONG_FILENAME)
         .find(
-          (el) =>
+          (el: HTMLElement) =>
             el.classList.contains("individual-tag-filename") ||
             el.classList.contains("file-name"),
         );
@@ -906,7 +927,9 @@ describe("App", () => {
 
       const filenameEl = screen
         .getAllByText(LONG_FILENAME)
-        .find((el) => el.classList.contains("individual-tag-filename"));
+        .find((el: HTMLElement) =>
+          el.classList.contains("individual-tag-filename"),
+        );
 
       expect(filenameEl).toBeTruthy();
       expectOverflowContained(filenameEl!);
@@ -983,7 +1006,7 @@ describe("App", () => {
       // The source filename in the results must also be contained.
       const sourceEl = screen
         .getAllByText(LONG_FILENAME)
-        .find((el) => el.classList.contains("download-filename"));
+        .find((el: HTMLElement) => el.classList.contains("download-filename"));
       expect(sourceEl).toBeTruthy();
       expectOverflowContained(sourceEl!);
 
@@ -1114,7 +1137,7 @@ describe("App", () => {
       // The file-picker summary shows the single filename.
       const summaryEl = screen
         .getAllByText(LONG_FILENAME)
-        .find((el) => el.classList.contains("file-name"));
+        .find((el: HTMLElement) => el.classList.contains("file-name"));
 
       expect(summaryEl).toBeTruthy();
       expectOverflowContained(summaryEl!);
