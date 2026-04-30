@@ -6,6 +6,11 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ## [0.3.2] - 2026-04-29
 
+
+### Changed
+
+- chore(deps-dev): bump jsdom from 29.0.2 to 29.1.1 ([#44](https://github.com/djryanj/media-tagger/pull/44))
+
 ### Added
 
 - Shared tagging mode now keeps per-file media previews visible and adds remove controls so files can be dropped from the queue before submission. [#38](https://github.com/djryanj/media-tagger/issues/38)
