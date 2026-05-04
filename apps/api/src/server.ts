@@ -15,6 +15,7 @@ import { GifConversionError, convertGifToMp4 } from "./gifConversion.js";
 import { UnsupportedMediaError, sanitizeFilename } from "./media.js";
 import {
   MetadataWriteError,
+  detectMediaType,
   writeTaggedMedia,
   writeTaggedMediaFromBuffer,
 } from "./metadata.js";
@@ -168,24 +169,34 @@ export function buildServer(
         let tagMimetype = mimetype;
 
         if (convertGif) {
-          const safeBase = sanitizeFilename(filename);
-          const currentExt = extname(safeBase);
-          const mp4Filename = currentExt
-            ? `${safeBase.slice(0, -currentExt.length)}.mp4`
-            : `${safeBase}.mp4`;
-          const mp4Path = join(dirname(workingInputPath), mp4Filename);
+          const detectedMedia = await detectMediaType(workingInputPath);
+          const isActuallyGif = detectedMedia.extension === "gif";
 
-          request.log.info({ filename, mp4Filename }, "Converting GIF to MP4.");
+          if (isActuallyGif) {
+            const safeBase = sanitizeFilename(filename);
+            const currentExt = extname(safeBase);
+            const mp4Filename = currentExt
+              ? `${safeBase.slice(0, -currentExt.length)}.mp4`
+              : `${safeBase}.mp4`;
+            const mp4Path = join(dirname(workingInputPath), mp4Filename);
 
-          await convertGifToMp4({
-            inputPath: workingInputPath,
-            outputPath: mp4Path,
-            onProgress: (percent) => sendEvent({ type: "progress", percent }),
-          });
+            request.log.info({ filename, mp4Filename }, "Converting GIF to MP4.");
 
-          tagInputPath = mp4Path;
-          tagFilename = mp4Filename;
-          tagMimetype = "video/mp4";
+            await convertGifToMp4({
+              inputPath: workingInputPath,
+              outputPath: mp4Path,
+              onProgress: (percent) => sendEvent({ type: "progress", percent }),
+            });
+
+            tagInputPath = mp4Path;
+            tagFilename = mp4Filename;
+            tagMimetype = "video/mp4";
+          } else {
+            request.log.info(
+              { filename, detectedExtension: detectedMedia.extension },
+              "convertGifToMp4 requested but file is not a GIF; tagging as-is.",
+            );
+          }
         }
 
         const taggedMedia = await writeTaggedMedia({

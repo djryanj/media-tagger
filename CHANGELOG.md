@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project uses semantic version tags for releases.
 
+## [0.4.1] - Unreleased
+
+### Fixed
+
+- GIF-to-MP4 conversion now applies to image files that carry GIF magic bytes (`GIF87a` / `GIF89a`) regardless of their file extension or declared MIME type (e.g. a `.jpg` that is actually a GIF). The browser reads the first six bytes of each selected image file to detect the signature, shows the conversion toggle for disguised GIFs, and routes them through the same FFmpeg path. The server independently re-checks the actual file type before converting, so a genuinely non-GIF file is always tagged normally even if the flag is set. [#58](https://github.com/djryanj/media-tagger/issues/58)
+
 ## [0.4.0] - 2026-05-04
 
 ### Added

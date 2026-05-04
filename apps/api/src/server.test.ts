@@ -129,6 +129,8 @@ describe("POST /api/media/tag-stream", () => {
     const gifBytes = Buffer.from("GIF89a fake gif content");
     const payload = "tags:cats,dogs";
 
+    // exiftool: detectMediaType → gif (actual type check)
+    queueExecFileSuccess("gif\nimage/gif\n");
     // exiftool: getGifFrameCount → 10 frames
     queueExecFileSuccess("10\n");
 
@@ -195,6 +197,8 @@ describe("POST /api/media/tag-stream", () => {
 
     const gifBytes = Buffer.from("GIF89a fake gif content");
 
+    // exiftool: detectMediaType → gif (actual type check)
+    queueExecFileSuccess("gif\nimage/gif\n");
     // exiftool: getGifFrameCount
     queueExecFileSuccess("5\n");
     // ffmpeg spawn: fail immediately
@@ -229,6 +233,117 @@ describe("POST /api/media/tag-stream", () => {
 
     expect(errorEvent).toBeDefined();
     expect(typeof errorEvent?.["message"]).toBe("string");
+  });
+
+  it("converts a JPG that is actually a GIF when convertGifToMp4 is true", async () => {
+    const app = buildServer();
+    const boundary = "test-boundary";
+
+    // Use real GIF magic bytes but a .jpg filename
+    const gifBytes = Buffer.from("GIF89a fake gif content");
+    const payload = "tags:cats";
+
+    // exiftool: detectMediaType → gif (detected from bytes, not filename)
+    queueExecFileSuccess("gif\nimage/gif\n");
+    // exiftool: getGifFrameCount
+    queueExecFileSuccess("8\n");
+
+    // ffmpeg spawn: write fake MP4 to output path, succeed
+    spawnMock.mockImplementationOnce((_cmd: string, args: string[]) => {
+      const outputPath = args[args.length - 1] as string;
+      return buildFakeProcessWithProgressAndOutput(
+        ["frame=4\n", "frame=8\n"],
+        outputPath,
+      );
+    });
+
+    // exiftool: detect converted mp4 type
+    queueExecFileSuccess("mp4\nvideo/mp4\n");
+    // exiftool: write metadata
+    queueExecFileSuccess("1 image files updated\n");
+    // exiftool: readback
+    queueExecFileSuccess(`${payload}\n`);
+
+    const body = buildMultipartBody(
+      {
+        convertGifToMp4: "true",
+        tags: "cats",
+        fileSize: String(gifBytes.length),
+      },
+      {
+        name: "file",
+        filename: "photo.jpg",
+        contentType: "image/jpeg",
+        content: gifBytes,
+      },
+      boundary,
+    );
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/media/tag-stream",
+      headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+      body,
+    });
+
+    expect(response.headers["content-type"]).toContain("text/event-stream");
+
+    const events = parseSseEvents(response.body);
+    const doneEvent = events.find((e) => e["type"] === "done");
+
+    expect(doneEvent).toBeDefined();
+    expect(doneEvent?.["filename"]).toMatch(/\.mp4$/i);
+    expect(doneEvent?.["contentType"]).toBe("video/mp4");
+  });
+
+  it("tags a real JPG without conversion when convertGifToMp4 is true", async () => {
+    const app = buildServer();
+    const boundary = "test-boundary";
+
+    const jpgBytes = Buffer.from("\xff\xd8\xff fake jpeg content");
+    const payload = "tags:cats";
+
+    // exiftool: detectMediaType → jpg (not a GIF)
+    queueExecFileSuccess("jpg\nimage/jpeg\n");
+    // exiftool: writeTaggedMedia detectMediaType
+    queueExecFileSuccess("jpg\nimage/jpeg\n");
+    // exiftool: write metadata
+    queueExecFileSuccess("1 image files updated\n");
+    // exiftool: readback
+    queueExecFileSuccess(`${payload}\n`);
+
+    const body = buildMultipartBody(
+      {
+        convertGifToMp4: "true",
+        tags: "cats",
+        fileSize: String(jpgBytes.length),
+      },
+      {
+        name: "file",
+        filename: "photo.jpg",
+        contentType: "image/jpeg",
+        content: jpgBytes,
+      },
+      boundary,
+    );
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/media/tag-stream",
+      headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+      body,
+    });
+
+    expect(response.headers["content-type"]).toContain("text/event-stream");
+
+    const events = parseSseEvents(response.body);
+    // No conversion should happen — spawnMock should not be called
+    expect(spawnMock).not.toHaveBeenCalled();
+
+    const doneEvent = events.find((e) => e["type"] === "done");
+    expect(doneEvent).toBeDefined();
+    expect(doneEvent?.["filename"]).toMatch(/\.jpg$/i);
+    expect(doneEvent?.["contentType"]).toBe("image/jpeg");
   });
 });
 

@@ -74,6 +74,9 @@ export default function App() {
   const [encodingProgress, setEncodingProgress] = useState<
     Record<string, number | null>
   >({});
+  const [detectedGifIds, setDetectedGifIds] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
 
   useEffect(() => {
     let isActive = true;
@@ -130,6 +133,39 @@ export default function App() {
     };
   }, [selectedFiles]);
 
+  useEffect(() => {
+    const candidates = selectedFiles.filter(
+      (file) => !isGifFile(file) && isImageFile(file),
+    );
+
+    if (candidates.length === 0) {
+      Promise.resolve().then(() => setDetectedGifIds(new Set()));
+      return;
+    }
+
+    let cancelled = false;
+
+    async function detectDisguisedGifs() {
+      const gifIds = new Set<string>();
+
+      for (const file of candidates) {
+        if (await hasGifMagicBytes(file)) {
+          gifIds.add(buildFileId(file));
+        }
+      }
+
+      if (!cancelled) {
+        setDetectedGifIds(gifIds);
+      }
+    }
+
+    void detectDisguisedGifs();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedFiles]);
+
   const visibleConfirmedTagGroups = getVisibleConfirmedTagGroups(
     tagMode,
     confirmedTagGroups,
@@ -148,8 +184,12 @@ export default function App() {
     }));
   }
 
+  function isEffectivelyGif(file: File): boolean {
+    return isGifFile(file) || detectedGifIds.has(buildFileId(file));
+  }
+
   function shouldConvertGif(file: File): boolean {
-    if (!isGifFile(file)) return false;
+    if (!isEffectivelyGif(file)) return false;
     if (tagMode === "individual") {
       return perFileConvertGif[buildFileId(file)] ?? true;
     }
@@ -162,6 +202,12 @@ export default function App() {
     setPerFileConvertGif((prev) => {
       const next = { ...prev };
       delete next[fileIdToRemove];
+      return next;
+    });
+
+    setDetectedGifIds((prev) => {
+      const next = new Set(prev);
+      next.delete(fileIdToRemove);
       return next;
     });
 
@@ -763,7 +809,7 @@ export default function App() {
             </div>
           </fieldset>
 
-          {selectedFiles.some(isGifFile) && tagMode === "shared" ? (
+          {selectedFiles.some(isEffectivelyGif) && tagMode === "shared" ? (
             <section className="field-card" aria-label="GIF to MP4 conversion">
               <span className="field-label">GIF to MP4 conversion</span>
               <p className="field-help">
@@ -879,7 +925,7 @@ export default function App() {
                           >
                             {file.name}
                           </span>
-                          {isGifFile(file) ? (
+                          {isEffectivelyGif(file) ? (
                             <label className="convert-gif-toggle">
                               <input
                                 checked={perFileConvertGif[fileId] ?? true}
@@ -1209,6 +1255,17 @@ function buildFileId(file: File): string {
 
 function isGifFile(file: File): boolean {
   return file.type === "image/gif" || file.name.toLowerCase().endsWith(".gif");
+}
+
+async function hasGifMagicBytes(file: File): Promise<boolean> {
+  try {
+    const buffer = await file.slice(0, 6).arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    // GIF87a = 47 49 46 38 37 61, GIF89a = 47 49 46 38 39 61
+    return bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46;
+  } catch {
+    return false;
+  }
 }
 
 function isPreviewableFile(file: File): boolean {

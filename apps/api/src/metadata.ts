@@ -146,7 +146,7 @@ export async function writeTaggedMediaFromBuffer({
   }
 }
 
-async function detectMediaType(
+export async function detectMediaType(
   targetPath: string,
 ): Promise<{ contentType: string; extension: string }> {
   const output = await runExifTool(["-s3", "-FileTypeExtension", "-MIMEType", targetPath]);

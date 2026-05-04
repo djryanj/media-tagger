@@ -33,6 +33,10 @@ A progress bar updates in real time as FFmpeg processes frames. The downloaded f
 
 To keep a GIF as-is, uncheck the toggle before submitting.
 
+### Disguised GIFs
+
+Some files carry a `.jpg` or other non-GIF extension but are actually GIF data. Media Tagger reads the first six bytes of every selected image file in the browser and checks for the `GIF87a` / `GIF89a` magic signature. Files that match are treated as GIFs — the conversion toggle appears for them and they are routed through the same FFmpeg path. The server also re-checks the actual file type independently, so a genuinely non-GIF file is always tagged in its original format even if the conversion flag is sent.
+
 ## Stack
 
 - TypeScript monorepo managed with pnpm workspaces
