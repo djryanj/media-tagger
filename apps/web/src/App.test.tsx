@@ -1437,5 +1437,70 @@ describe("App", () => {
         ).toBeVisible(),
       );
     });
+
+    it("routes a JPG with GIF magic bytes through tag-stream when conversion is enabled", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+
+      // A JPG file whose first 3 bytes are the GIF magic signature
+      const gifMagicBytes = new Uint8Array([
+        0x47,
+        0x49,
+        0x46,
+        0x38,
+        0x39,
+        0x61, // GIF89a
+        ...new Array(10).fill(0x00),
+      ]);
+      const disguisedFile = new File([gifMagicBytes], "photo.jpg", {
+        type: "image/jpeg",
+      });
+
+      const doneEvent = {
+        type: "done",
+        filename: "photo.mp4",
+        contentType: "video/mp4",
+        data: base64Encode("fake mp4 bytes"),
+        tags: ["cats"],
+        resolutionWarning: null,
+      };
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+      fetchMock.mockResolvedValueOnce(buildSseResponse([doneEvent]));
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        disguisedFile,
+      );
+
+      // The GIF conversion section should appear because magic bytes detected a GIF
+      await waitFor(() =>
+        expect(
+          screen.getByRole("region", { name: "GIF to MP4 conversion" }),
+        ).toBeVisible(),
+      );
+
+      await user.type(screen.getByRole("textbox", { name: /tags/i }), "cats");
+      await user.click(
+        screen.getByRole("button", { name: "Tag all and download" }),
+      );
+
+      await waitFor(() =>
+        expect(getStreamUploadCalls(fetchMock)).toHaveLength(1),
+      );
+
+      // Should have used tag-stream with convertGifToMp4=true
+      const streamCall = getStreamUploadCalls(fetchMock)[0];
+      const formData = streamCall?.[1]?.body as FormData;
+      expect(formData.get("convertGifToMp4")).toBe("true");
+      expect((formData.get("file") as File).name).toBe("photo.jpg");
+
+      await waitFor(() =>
+        expect(screen.getByText("Downloaded photo.mp4.")).toBeVisible(),
+      );
+    });
   });
 });
