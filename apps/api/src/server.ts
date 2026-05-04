@@ -1,6 +1,7 @@
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
-import { rm } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, extname, join, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
 
@@ -10,7 +11,8 @@ import fastifyStatic from "@fastify/static";
 import Fastify, { FastifyReply, FastifyRequest } from "fastify";
 
 import { getServerRuntimeConfig } from "./config.js";
-import { UnsupportedMediaError } from "./media.js";
+import { GifConversionError, convertGifToMp4 } from "./gifConversion.js";
+import { UnsupportedMediaError, sanitizeFilename } from "./media.js";
 import {
   MetadataWriteError,
   writeTaggedMedia,
@@ -62,6 +64,183 @@ export function buildServer(
   app.get("/health", async () => ({ ok: true }));
   app.get("/api/health", async () => ({ ok: true }));
   app.get("/api/config", async () => runtimeConfig);
+
+  /**
+   * POST /api/media/tag-stream
+   * Same multipart fields as /api/media/tag plus `convertGifToMp4=true`.
+   * Returns a text/event-stream response with progress events and a final
+   * `done` event carrying the tagged file as a base64 payload.
+   */
+  app.post(
+    "/api/media/tag-stream",
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const parts = request.parts();
+      let filename = "tagged-media";
+      let declaredFileSize: number | null = null;
+      let mimetype = "application/octet-stream";
+      let rawTags = "";
+      let convertGif = false;
+      let upload:
+        | Awaited<ReturnType<typeof consumeUploadedFile>>
+        | null = null;
+
+      try {
+        for await (const part of parts) {
+          if (part.type === "file") {
+            if (part.fieldname !== "file") {
+              await pipeline(part.file, createWriteStream("/dev/null"));
+              continue;
+            }
+
+            filename = part.filename ?? filename;
+            mimetype = part.mimetype;
+            upload = await consumeUploadedFile({
+              declaredFileSize,
+              filename,
+              fileStream: part.file,
+              inMemoryUploadLimitBytes: runtimeConfig.inMemoryUploadLimitBytes,
+            });
+            continue;
+          }
+
+          if (part.fieldname === "tags") {
+            rawTags = String(part.value ?? "");
+          }
+          if (part.fieldname === "fileSize") {
+            declaredFileSize = parseDeclaredFileSize(String(part.value ?? ""));
+          }
+          if (part.fieldname === "convertGifToMp4") {
+            convertGif = String(part.value) === "true";
+          }
+        }
+      } catch (error) {
+        if (upload?.inputPath) {
+          await rm(dirname(upload.inputPath), { force: true, recursive: true });
+        }
+
+        throw error;
+      }
+
+      if (!upload || (!upload.inputPath && !upload.buffer)) {
+        return reply.code(400).send({ error: "A media file is required." });
+      }
+
+      const tags = normalizeTags(rawTags);
+
+      if (tags.length === 0) {
+        if (upload.inputPath) {
+          await rm(dirname(upload.inputPath), { force: true, recursive: true });
+        }
+        return reply.code(400).send({ error: "At least one tag is required." });
+      }
+
+      const payload = renderPayload(tags);
+
+      // Hijack the response so we can stream SSE events directly.
+      reply.hijack();
+      reply.raw.setHeader("Content-Type", "text/event-stream");
+      reply.raw.setHeader("Cache-Control", "no-cache");
+      reply.raw.setHeader("Connection", "keep-alive");
+      reply.raw.setHeader("Access-Control-Allow-Origin", "*");
+      reply.raw.setHeader("Access-Control-Expose-Headers", "Content-Type");
+      reply.raw.flushHeaders();
+
+      const sendEvent = (data: unknown) => {
+        reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
+      };
+
+      let extraWorkingDir: string | null = null;
+
+      try {
+        // If the upload was buffered in memory, write it to disk so FFmpeg can read it.
+        let workingInputPath: string;
+
+        if (upload.processingMode === "memory") {
+          extraWorkingDir = await mkdtemp(join(tmpdir(), "media-tagger-stream-"));
+          workingInputPath = join(extraWorkingDir, sanitizeFilename(filename));
+          await writeFile(workingInputPath, upload.buffer as Buffer);
+        } else {
+          workingInputPath = upload.inputPath as string;
+        }
+
+        let tagInputPath = workingInputPath;
+        let tagFilename = filename;
+        let tagMimetype = mimetype;
+
+        if (convertGif) {
+          const safeBase = sanitizeFilename(filename);
+          const currentExt = extname(safeBase);
+          const mp4Filename = currentExt
+            ? `${safeBase.slice(0, -currentExt.length)}.mp4`
+            : `${safeBase}.mp4`;
+          const mp4Path = join(dirname(workingInputPath), mp4Filename);
+
+          request.log.info({ filename, mp4Filename }, "Converting GIF to MP4.");
+
+          await convertGifToMp4({
+            inputPath: workingInputPath,
+            outputPath: mp4Path,
+            onProgress: (percent) => sendEvent({ type: "progress", percent }),
+          });
+
+          tagInputPath = mp4Path;
+          tagFilename = mp4Filename;
+          tagMimetype = "video/mp4";
+        }
+
+        const taggedMedia = await writeTaggedMedia({
+          filename: tagFilename,
+          inputPath: tagInputPath,
+          mimetype: tagMimetype,
+          payload,
+        });
+
+        const fileBuffer = await readFile(taggedMedia.outputPath);
+
+        request.log.info(
+          {
+            convertGif,
+            filename,
+            outputFilename: taggedMedia.filename,
+            tagCount: tags.length,
+          },
+          "Streamed tagged media successfully.",
+        );
+
+        sendEvent({
+          type: "done",
+          filename: taggedMedia.filename,
+          contentType: taggedMedia.contentType,
+          data: fileBuffer.toString("base64"),
+          tags,
+          resolutionWarning: taggedMedia.resolution.warning ?? null,
+        });
+      } catch (error) {
+        request.log.error(error);
+
+        const message =
+          error instanceof GifConversionError
+            ? error.message
+            : error instanceof UnsupportedMediaError
+              ? error.message
+              : error instanceof MetadataWriteError
+                ? error.message
+                : "Unexpected server failure.";
+
+        sendEvent({ type: "error", message });
+      } finally {
+        reply.raw.end();
+
+        if (extraWorkingDir) {
+          await rm(extraWorkingDir, { force: true, recursive: true });
+        }
+
+        if (upload?.inputPath) {
+          await rm(dirname(upload.inputPath), { force: true, recursive: true });
+        }
+      }
+    },
+  );
 
   app.post(
     "/api/media/tag",

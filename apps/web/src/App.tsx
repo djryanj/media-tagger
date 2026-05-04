@@ -1,5 +1,14 @@
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 
+type GifTagStreamDoneEvent = {
+  type: "done";
+  contentType: string;
+  data: string;
+  filename: string;
+  resolutionWarning: string | null;
+  tags: string[];
+};
+
 const ACCEPTED_FILE_TYPES = ".jpg,.jpeg,.png,.webp,.gif,.mp4,.mov";
 const MAX_FILES = 20;
 
@@ -58,6 +67,13 @@ export default function App() {
   >("loading");
   const [warningMessages, setWarningMessages] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [convertGifsToMp4, setConvertGifsToMp4] = useState(true);
+  const [perFileConvertGif, setPerFileConvertGif] = useState<
+    Record<string, boolean>
+  >({});
+  const [encodingProgress, setEncodingProgress] = useState<
+    Record<string, number | null>
+  >({});
 
   useEffect(() => {
     let isActive = true;
@@ -132,8 +148,28 @@ export default function App() {
     }));
   }
 
+  function shouldConvertGif(file: File): boolean {
+    if (!isGifFile(file)) return false;
+    if (tagMode === "individual") {
+      return perFileConvertGif[buildFileId(file)] ?? true;
+    }
+    return convertGifsToMp4;
+  }
+
   function removeQueuedFile(fileToRemove: File, skipStatusUpdate = false) {
     const fileIdToRemove = buildFileId(fileToRemove);
+
+    setPerFileConvertGif((prev) => {
+      const next = { ...prev };
+      delete next[fileIdToRemove];
+      return next;
+    });
+
+    setEncodingProgress((prev) => {
+      const next = { ...prev };
+      delete next[fileIdToRemove];
+      return next;
+    });
 
     setSelectedFiles((previousFiles) => {
       const nextFiles = previousFiles.filter(
@@ -235,71 +271,212 @@ export default function App() {
         );
 
         try {
-          const formData = new FormData();
-          formData.append("fileSize", String(file.size));
-          formData.append("tags", value);
-          formData.append("file", file);
+          if (shouldConvertGif(file)) {
+            const fileId = buildFileId(file);
+            setEncodingProgress((prev) => ({ ...prev, [fileId]: 0 }));
 
-          const response = await fetch("/api/media/tag", {
-            method: "POST",
-            body: formData,
-          });
+            const gifFormData = new FormData();
+            gifFormData.append("convertGifToMp4", "true");
+            gifFormData.append("fileSize", String(file.size));
+            gifFormData.append("tags", value);
+            gifFormData.append("file", file);
 
-          if (!response.ok) {
-            const responseError = await readErrorMessage(response);
-            throw new Error(responseError);
-          }
+            const streamResponse = await fetch("/api/media/tag-stream", {
+              method: "POST",
+              body: gifFormData,
+            });
 
-          const confirmedTagsHeader = response.headers.get(
-            "x-media-tagger-confirmed-tags",
-          );
+            if (!streamResponse.ok || !streamResponse.body) {
+              const errorMsg = await readErrorMessage(streamResponse);
+              throw new Error(errorMsg);
+            }
 
-          if (confirmedTagsHeader) {
+            const reader = streamResponse.body.getReader();
+            const decoder = new TextDecoder();
+            let sseBuffer = "";
+            let donePayload: GifTagStreamDoneEvent | null = null;
+
             try {
+              readLoop: while (true) {
+                const { value: chunk, done } = await reader.read();
+
+                if (done) {
+                  break;
+                }
+
+                sseBuffer += decoder.decode(chunk, { stream: true });
+                const sseEvents = sseBuffer.split("\n\n");
+                sseBuffer = sseEvents.pop() ?? "";
+
+                for (const sseEvent of sseEvents) {
+                  const dataLine = sseEvent
+                    .split("\n")
+                    .find((l) => l.startsWith("data: "));
+
+                  if (!dataLine) {
+                    continue;
+                  }
+
+                  let parsed: unknown;
+
+                  try {
+                    parsed = JSON.parse(dataLine.slice(6));
+                  } catch {
+                    continue;
+                  }
+
+                  if (
+                    !parsed ||
+                    typeof parsed !== "object" ||
+                    !("type" in parsed)
+                  ) {
+                    continue;
+                  }
+
+                  const evt = parsed as Record<string, unknown>;
+
+                  if (
+                    evt["type"] === "progress" &&
+                    typeof evt["percent"] === "number"
+                  ) {
+                    setEncodingProgress((prev) => ({
+                      ...prev,
+                      [fileId]: evt["percent"] as number,
+                    }));
+                  } else if (
+                    evt["type"] === "done" &&
+                    typeof evt["filename"] === "string" &&
+                    typeof evt["contentType"] === "string" &&
+                    typeof evt["data"] === "string"
+                  ) {
+                    donePayload = evt as unknown as GifTagStreamDoneEvent;
+                    break readLoop;
+                  } else if (evt["type"] === "error") {
+                    throw new Error(
+                      typeof evt["message"] === "string"
+                        ? evt["message"]
+                        : "GIF conversion failed.",
+                    );
+                  }
+                }
+              }
+            } finally {
+              reader.releaseLock();
+              setEncodingProgress((prev) => {
+                const next = { ...prev };
+                delete next[fileId];
+                return next;
+              });
+            }
+
+            if (!donePayload) {
+              throw new Error("GIF conversion stream ended without a result.");
+            }
+
+            const gifBytes = Uint8Array.from(atob(donePayload.data), (c) =>
+              c.charCodeAt(0),
+            );
+            const gifBlob = new Blob([gifBytes], {
+              type: donePayload.contentType,
+            });
+            const gifDownloadFilename = donePayload.filename;
+            const gifCompletedDownload = {
+              id: `${file.name}-${gifDownloadFilename}`,
+              blob: gifBlob,
+              downloadFilename: gifDownloadFilename,
+              sourceFilename: file.name,
+            };
+
+            setProcessedDownloads((previousDownloads) => {
+              if (
+                previousDownloads.some((d) => d.id === gifCompletedDownload.id)
+              ) {
+                return previousDownloads;
+              }
+
+              return [...previousDownloads, gifCompletedDownload];
+            });
+
+            triggerDownload(gifBlob, gifDownloadFilename);
+            downloadedFilenames.push(gifDownloadFilename);
+
+            if (Array.isArray(donePayload.tags)) {
               nextConfirmedTagGroups.push({
                 sourceFilename: file.name,
-                tags: JSON.parse(confirmedTagsHeader) as string[],
+                tags: donePayload.tags,
               });
-            } catch {
-              // ignore invalid header payloads
-            }
-          }
-
-          const blob = await response.blob();
-          const downloadFilename =
-            getFilenameFromContentDisposition(
-              response.headers.get("content-disposition"),
-            ) ?? file.name;
-          const resolutionWarning = response.headers.get(
-            "x-media-tagger-file-resolution",
-          );
-
-          if (resolutionWarning) {
-            responseWarnings.add(resolutionWarning);
-          }
-
-          const completedDownload = {
-            id: `${file.name}-${downloadFilename}`,
-            blob,
-            downloadFilename,
-            sourceFilename: file.name,
-          };
-
-          setProcessedDownloads((previousDownloads) => {
-            if (
-              previousDownloads.some(
-                (previousDownload) =>
-                  previousDownload.id === completedDownload.id,
-              )
-            ) {
-              return previousDownloads;
             }
 
-            return [...previousDownloads, completedDownload];
-          });
+            if (donePayload.resolutionWarning) {
+              responseWarnings.add(donePayload.resolutionWarning);
+            }
+          } else {
+            const formData = new FormData();
+            formData.append("fileSize", String(file.size));
+            formData.append("tags", value);
+            formData.append("file", file);
 
-          triggerDownload(blob, downloadFilename);
-          downloadedFilenames.push(downloadFilename);
+            const response = await fetch("/api/media/tag", {
+              method: "POST",
+              body: formData,
+            });
+
+            if (!response.ok) {
+              const responseError = await readErrorMessage(response);
+              throw new Error(responseError);
+            }
+
+            const confirmedTagsHeader = response.headers.get(
+              "x-media-tagger-confirmed-tags",
+            );
+
+            if (confirmedTagsHeader) {
+              try {
+                nextConfirmedTagGroups.push({
+                  sourceFilename: file.name,
+                  tags: JSON.parse(confirmedTagsHeader) as string[],
+                });
+              } catch {
+                // ignore invalid header payloads
+              }
+            }
+
+            const blob = await response.blob();
+            const downloadFilename =
+              getFilenameFromContentDisposition(
+                response.headers.get("content-disposition"),
+              ) ?? file.name;
+            const resolutionWarning = response.headers.get(
+              "x-media-tagger-file-resolution",
+            );
+
+            if (resolutionWarning) {
+              responseWarnings.add(resolutionWarning);
+            }
+
+            const completedDownload = {
+              id: `${file.name}-${downloadFilename}`,
+              blob,
+              downloadFilename,
+              sourceFilename: file.name,
+            };
+
+            setProcessedDownloads((previousDownloads) => {
+              if (
+                previousDownloads.some(
+                  (previousDownload) =>
+                    previousDownload.id === completedDownload.id,
+                )
+              ) {
+                return previousDownloads;
+              }
+
+              return [...previousDownloads, completedDownload];
+            });
+
+            triggerDownload(blob, downloadFilename);
+            downloadedFilenames.push(downloadFilename);
+          }
         } catch (error) {
           failures.push({
             file: file.name,
@@ -496,6 +673,7 @@ export default function App() {
     setPerFileTags((previousTags) =>
       buildPerFileTagMap(files, previousTags, tags),
     );
+    setPerFileConvertGif({});
     setCopiedTags(null);
     setCopiedFromFilename(null);
     setProcessedDownloads([]);
@@ -585,6 +763,25 @@ export default function App() {
             </div>
           </fieldset>
 
+          {selectedFiles.some(isGifFile) && tagMode === "shared" ? (
+            <section className="field-card" aria-label="GIF to MP4 conversion">
+              <span className="field-label">GIF to MP4 conversion</span>
+              <p className="field-help">
+                Convert GIF files to MP4 for dramatically smaller file sizes at
+                equivalent visual quality.
+              </p>
+              <label className="convert-gif-toggle">
+                <input
+                  checked={convertGifsToMp4}
+                  disabled={isSubmitting}
+                  onChange={(e) => setConvertGifsToMp4(e.target.checked)}
+                  type="checkbox"
+                />
+                <span>Convert GIF files to MP4 (recommended)</span>
+              </label>
+            </section>
+          ) : null}
+
           {tagMode === "shared" ? (
             <section className="field-card" aria-label="Tags">
               <label className="field-label" htmlFor="media-tags">
@@ -599,31 +796,46 @@ export default function App() {
                   className="shared-preview-list"
                   aria-label="Selected files"
                 >
-                  {selectedFiles.map((file) => (
-                    <article
-                      className="shared-preview-item"
-                      key={buildFileId(file)}
-                    >
-                      {renderMediaPreview(file, { allowVideoPreview: true })}
-                      <div className="shared-preview-copy">
-                        <span
-                          className="field-value individual-tag-filename"
-                          title={file.name}
-                        >
-                          {file.name}
-                        </span>
-                        <button
-                          aria-label={`Remove ${file.name}`}
-                          className="secondary-button"
-                          disabled={isSubmitting}
-                          onClick={() => removeQueuedFile(file)}
-                          type="button"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    </article>
-                  ))}
+                  {selectedFiles.map((file) => {
+                    const fileId = buildFileId(file);
+                    const progress = encodingProgress[fileId];
+
+                    return (
+                      <article className="shared-preview-item" key={fileId}>
+                        {renderMediaPreview(file, { allowVideoPreview: true })}
+                        <div className="shared-preview-copy">
+                          <span
+                            className="field-value individual-tag-filename"
+                            title={file.name}
+                          >
+                            {file.name}
+                          </span>
+                          {progress != null ? (
+                            <div className="encoding-progress-wrapper">
+                              <span className="encoding-progress-label">
+                                Converting to MP4&hellip; {progress}%
+                              </span>
+                              <progress
+                                aria-label={`Encoding progress for ${file.name}`}
+                                className="encoding-progress"
+                                max={100}
+                                value={progress}
+                              />
+                            </div>
+                          ) : null}
+                          <button
+                            aria-label={`Remove ${file.name}`}
+                            className="secondary-button"
+                            disabled={isSubmitting}
+                            onClick={() => removeQueuedFile(file)}
+                            type="button"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
                 </div>
               ) : (
                 <span className="field-value">
@@ -667,6 +879,36 @@ export default function App() {
                           >
                             {file.name}
                           </span>
+                          {isGifFile(file) ? (
+                            <label className="convert-gif-toggle">
+                              <input
+                                checked={perFileConvertGif[fileId] ?? true}
+                                disabled={isSubmitting}
+                                onChange={(e) =>
+                                  setPerFileConvertGif((prev) => ({
+                                    ...prev,
+                                    [fileId]: e.target.checked,
+                                  }))
+                                }
+                                type="checkbox"
+                              />
+                              <span>Convert to MP4</span>
+                            </label>
+                          ) : null}
+                          {encodingProgress[fileId] != null ? (
+                            <div className="encoding-progress-wrapper">
+                              <span className="encoding-progress-label">
+                                Converting to MP4&hellip;{" "}
+                                {encodingProgress[fileId]}%
+                              </span>
+                              <progress
+                                aria-label={`Encoding progress for ${file.name}`}
+                                className="encoding-progress"
+                                max={100}
+                                value={encodingProgress[fileId]!}
+                              />
+                            </div>
+                          ) : null}
                           <label
                             className="individual-tag-label"
                             htmlFor={`media-tags-${fileId}`}
@@ -963,6 +1205,10 @@ function stripTrailingZeroes(value: string): string {
 
 function buildFileId(file: File): string {
   return `${file.name}-${file.size}-${file.lastModified}`;
+}
+
+function isGifFile(file: File): boolean {
+  return file.type === "image/gif" || file.name.toLowerCase().endsWith(".gif");
 }
 
 function isPreviewableFile(file: File): boolean {

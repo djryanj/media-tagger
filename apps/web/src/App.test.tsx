@@ -1148,4 +1148,294 @@ describe("App", () => {
       expectOverflowContained(pickerRow as HTMLElement);
     });
   });
+
+  // ─── GIF-to-MP4 conversion tests ─────────────────────────────────────
+
+  describe("GIF-to-MP4 conversion", () => {
+    function getStreamUploadCalls(
+      fetchMock: ReturnType<typeof vi.mocked<typeof fetch>>,
+    ) {
+      return fetchMock.mock.calls.filter(
+        (call) => call[0] === "/api/media/tag-stream",
+      );
+    }
+
+    function buildSseResponse(
+      events: Array<Record<string, unknown>>,
+    ): Response {
+      const body = events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("");
+      return new Response(body, {
+        status: 200,
+        headers: { "content-type": "text/event-stream" },
+      });
+    }
+
+    function base64Encode(str: string): string {
+      return btoa(str);
+    }
+
+    it("shows the GIF-to-MP4 conversion section when a GIF is selected (shared mode)", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const gifFile = new File(["GIF89a"], "animation.gif", {
+        type: "image/gif",
+      });
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      // Before selecting a GIF, the section should not be visible
+      expect(
+        screen.queryByRole("region", { name: "GIF to MP4 conversion" }),
+      ).toBeNull();
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        gifFile,
+      );
+
+      // After selecting a GIF, the section should appear with a checked checkbox
+      const conversionSection = screen.getByRole("region", {
+        name: "GIF to MP4 conversion",
+      });
+      expect(conversionSection).toBeVisible();
+
+      const conversionCheckbox = screen.getByRole("checkbox", {
+        name: /Convert GIF files to MP4/i,
+      });
+      expect(conversionCheckbox).toBeVisible();
+      expect(conversionCheckbox).toBeChecked();
+    });
+
+    it("does not show the GIF conversion section for non-GIF files", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const pngFile = new File(["png-data"], "photo.png", {
+        type: "image/png",
+      });
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        pngFile,
+      );
+
+      expect(
+        screen.queryByRole("checkbox", { name: /Convert GIF files to MP4/i }),
+      ).toBeNull();
+    });
+
+    it("uses /api/media/tag-stream when GIF conversion is enabled", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const gifFile = new File(["GIF89a"], "animation.gif", {
+        type: "image/gif",
+      });
+
+      const doneEvent = {
+        type: "done",
+        filename: "animation.mp4",
+        contentType: "video/mp4",
+        data: base64Encode("fake mp4 bytes"),
+        tags: ["cats", "dogs"],
+        resolutionWarning: null,
+      };
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+      fetchMock.mockResolvedValueOnce(buildSseResponse([doneEvent]));
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        gifFile,
+      );
+      await user.type(
+        screen.getByRole("textbox", { name: /tags/i }),
+        "cats, dogs",
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Tag all and download" }),
+      );
+
+      await waitFor(() =>
+        expect(getStreamUploadCalls(fetchMock)).toHaveLength(1),
+      );
+
+      // Should have called tag-stream, not tag
+      expect(getUploadCalls(fetchMock)).toHaveLength(0);
+      expect(getStreamUploadCalls(fetchMock)).toHaveLength(1);
+
+      const streamCall = getStreamUploadCalls(fetchMock)[0];
+      const formData = streamCall?.[1]?.body as FormData;
+      expect(formData.get("convertGifToMp4")).toBe("true");
+      expect((formData.get("file") as File).name).toBe("animation.gif");
+
+      await waitFor(() =>
+        expect(screen.getByText("Downloaded animation.mp4.")).toBeVisible(),
+      );
+      expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledTimes(1);
+    });
+
+    it("uses /api/media/tag (not stream) when GIF conversion is disabled", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const gifFile = new File(["GIF89a"], "animation.gif", {
+        type: "image/gif",
+      });
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+      fetchMock.mockResolvedValueOnce(
+        new Response(new Blob(["tagged-gif"]), {
+          status: 200,
+          headers: {
+            "content-disposition": 'attachment; filename="animation.gif"',
+            "content-type": "image/gif",
+          },
+        }),
+      );
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        gifFile,
+      );
+
+      // Uncheck the conversion checkbox
+      const conversionCheckbox = screen.getByRole("checkbox", {
+        name: /Convert GIF files to MP4/i,
+      });
+      await user.click(conversionCheckbox);
+      expect(conversionCheckbox).not.toBeChecked();
+
+      await user.type(screen.getByRole("textbox", { name: /tags/i }), "cats");
+      await user.click(
+        screen.getByRole("button", { name: "Tag all and download" }),
+      );
+
+      await waitFor(() => expect(getUploadCalls(fetchMock)).toHaveLength(1));
+      expect(getStreamUploadCalls(fetchMock)).toHaveLength(0);
+    });
+
+    it("shows per-file Convert to MP4 checkbox in individual mode for GIF files", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const gifFile = new File(["GIF89a"], "animation.gif", {
+        type: "image/gif",
+      });
+      const pngFile = new File(["png"], "photo.png", { type: "image/png" });
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        [gifFile, pngFile],
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Tag images individually" }),
+      );
+
+      // GIF file should show per-file "Convert to MP4" checkbox (checked by default)
+      const gifConvertCheckbox = screen.getByRole("checkbox", {
+        name: /Convert to MP4/i,
+      });
+      expect(gifConvertCheckbox).toBeVisible();
+      expect(gifConvertCheckbox).toBeChecked();
+
+      // PNG file should NOT have a convert checkbox
+      expect(
+        screen.queryByRole("checkbox", {
+          name: /Convert GIF files to MP4/i,
+        }),
+      ).toBeNull();
+    });
+
+    it("streams progress events and updates the UI while encoding", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const gifFile = new File(["GIF89a"], "animation.gif", {
+        type: "image/gif",
+      });
+
+      const sseEvents = [
+        { type: "progress", percent: 25 },
+        { type: "progress", percent: 75 },
+        {
+          type: "done",
+          filename: "animation.mp4",
+          contentType: "video/mp4",
+          data: base64Encode("fake mp4"),
+          tags: ["cats"],
+          resolutionWarning: null,
+        },
+      ];
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+      fetchMock.mockResolvedValueOnce(buildSseResponse(sseEvents));
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        gifFile,
+      );
+      await user.type(screen.getByRole("textbox", { name: /tags/i }), "cats");
+      await user.click(
+        screen.getByRole("button", { name: "Tag all and download" }),
+      );
+
+      await waitFor(() =>
+        expect(screen.getByText("Downloaded animation.mp4.")).toBeVisible(),
+      );
+      expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledTimes(1);
+    });
+
+    it("shows an error message when the stream returns an error event", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const gifFile = new File(["GIF89a"], "animation.gif", {
+        type: "image/gif",
+      });
+
+      const sseEvents = [
+        { type: "error", message: "FFmpeg GIF-to-MP4 conversion failed." },
+      ];
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+      fetchMock.mockResolvedValueOnce(buildSseResponse(sseEvents));
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        gifFile,
+      );
+      await user.type(screen.getByRole("textbox", { name: /tags/i }), "cats");
+      await user.click(
+        screen.getByRole("button", { name: "Tag all and download" }),
+      );
+
+      await waitFor(() =>
+        expect(
+          screen.getByText(
+            "animation.gif: FFmpeg GIF-to-MP4 conversion failed.",
+          ),
+        ).toBeVisible(),
+      );
+    });
+  });
 });

@@ -20,6 +20,19 @@ The core workflow is intentionally narrow:
 
 The current supported set for metadata writing is JPG, JPEG, PNG, WebP, GIF, MP4, and MOV.
 
+## GIF to MP4 Conversion
+
+When uploading GIF files, Media Tagger can optionally re-encode them as MP4 before writing metadata. The conversion uses FFmpeg with libx264 at CRF 23 and yuv420p pixel format, producing output that is visually indistinguishable from the source GIF at a dramatically smaller file size. The `+faststart` flag is applied so the MP4 is streaming-friendly.
+
+The option defaults to **enabled**:
+
+- In **shared tagging mode**, a toggle appears in the form whenever at least one GIF is selected.
+- In **individual tagging mode**, each GIF file has its own per-file checkbox.
+
+A progress bar updates in real time as FFmpeg processes frames. The downloaded file will be named with an `.mp4` extension and will have the tag payload written into its metadata after conversion.
+
+To keep a GIF as-is, uncheck the toggle before submitting.
+
 ## Stack
 
 - TypeScript monorepo managed with pnpm workspaces

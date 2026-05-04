@@ -594,3 +594,66 @@ h1 {
     grid-template-columns: 1fr;
   }
 }
+
+/* GIF-to-MP4 conversion toggle */
+.convert-gif-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #1f1f1f;
+  user-select: none;
+}
+
+.convert-gif-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  accent-color: #597899;
+  cursor: pointer;
+}
+
+.convert-gif-toggle input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Encoding progress bar */
+.encoding-progress-wrapper {
+  display: grid;
+  gap: 4px;
+}
+
+.encoding-progress-label {
+  font-size: 0.87rem;
+  color: #3a5a7a;
+  font-weight: 600;
+}
+
+.encoding-progress {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  border: none;
+  appearance: none;
+  background: #d8e3ed;
+  overflow: hidden;
+}
+
+.encoding-progress::-webkit-progress-bar {
+  background: #d8e3ed;
+  border-radius: 3px;
+}
+
+.encoding-progress::-webkit-progress-value {
+  background: #597899;
+  border-radius: 3px;
+  transition: width 180ms ease;
+}
+
+.encoding-progress::-moz-progress-bar {
+  background: #597899;
+  border-radius: 3px;
+}
