@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project uses semantic version tags for releases.
 
+## [Unreleased] - 0.4.0
+
+### Added
+
+- GIF files can now be re-encoded as MP4 on upload using FFmpeg and libx264 (CRF 23, yuv420p, faststart), producing files that are visually indistinguishable from the source GIF at dramatically smaller sizes. Conversion is opt-in per-file in individual tagging mode and globally toggled in shared mode, both defaulting to enabled. A live progress bar tracks encoding frame-by-frame via FFmpeg's `-progress pipe:1` output streamed over Server-Sent Events. Metadata is written to the converted MP4 after encoding. [#55](https://github.com/djryanj/media-tagger/issues/55)
+
 ## [0.3.4] - 2026-04-30
 
 ### Fixed
