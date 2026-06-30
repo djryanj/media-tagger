@@ -6,6 +6,11 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ## [0.5.0] - Unreleased
 
+
+### Changed
+
+- chore(deps): bump actions/labeler from 6.0.1 to 6.1.0 ([#61](https://github.com/djryanj/media-tagger/pull/61))
+
 ### Added
 
 - Tapping on videos now allows you to preview them in the browser before submitting for tagging. [#77](https://github.com/djryanj/media-tagger/issues/77)
