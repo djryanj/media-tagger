@@ -8,6 +8,7 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ### Changed
 
+- chore(deps): bump docker/setup-qemu-action from 4.0.0 to 4.1.0 ([#68](https://github.com/djryanj/media-tagger/pull/68))
 - chore(deps-dev): bump vite from 8.0.10 to 8.1.1 ([#67](https://github.com/djryanj/media-tagger/pull/67))
 - chore(deps-dev): bump typescript-eslint from 8.59.0 to 8.62.1 ([#65](https://github.com/djryanj/media-tagger/pull/65))
 - chore(deps): bump react and react-dom from 19.2.5 to 19.2.7 ([#64](https://github.com/djryanj/media-tagger/pull/64))
