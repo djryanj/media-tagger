@@ -8,6 +8,7 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ### Changed
 
+- chore(deps): bump docker/build-push-action from 7.1.0 to 7.2.0 ([#69](https://github.com/djryanj/media-tagger/pull/69))
 - chore(deps): bump docker/metadata-action from 6.0.0 to 6.1.0 ([#70](https://github.com/djryanj/media-tagger/pull/70))
 - chore(deps): bump docker/setup-qemu-action from 4.0.0 to 4.1.0 ([#68](https://github.com/djryanj/media-tagger/pull/68))
 - chore(deps-dev): bump vite from 8.0.10 to 8.1.1 ([#67](https://github.com/djryanj/media-tagger/pull/67))
