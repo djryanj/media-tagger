@@ -8,6 +8,7 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ### Changed
 
+- chore(deps-dev): bump typescript-eslint from 8.59.0 to 8.62.1 ([#65](https://github.com/djryanj/media-tagger/pull/65))
 - chore(deps): bump react and react-dom from 19.2.5 to 19.2.7 ([#64](https://github.com/djryanj/media-tagger/pull/64))
 - chore(deps): bump renovatebot/github-action from 46.1.12 to 46.1.17 ([#63](https://github.com/djryanj/media-tagger/pull/63))
 - chore(deps-dev): bump globals from 17.5.0 to 17.7.0 ([#62](https://github.com/djryanj/media-tagger/pull/62))
