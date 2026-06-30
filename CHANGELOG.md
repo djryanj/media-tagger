@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project uses semantic version tags for releases.
 
+## [0.5.0] - Unreleased
+
+### Added
+
+- Tapping on videos now allows you to preview them in the browser before submitting for tagging. [#77](https://github.com/djryanj/media-tagger/issues/77)
+
 ## [0.4.1] - 2026-05-04
 
 ### Fixed
