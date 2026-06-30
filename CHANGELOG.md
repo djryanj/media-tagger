@@ -9,6 +9,7 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ### Changed
 
+- chore(deps-dev): bump globals from 17.5.0 to 17.7.0 ([#62](https://github.com/djryanj/media-tagger/pull/62))
 - chore(deps): bump actions/labeler from 6.0.1 to 6.1.0 ([#61](https://github.com/djryanj/media-tagger/pull/61))
 
 ### Added
