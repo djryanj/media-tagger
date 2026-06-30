@@ -595,6 +595,138 @@ h1 {
   }
 }
 
+/* Video thumbnail click-to-preview button */
+.preview-frame-button {
+  display: block;
+  width: 100%;
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.preview-frame-button:focus-visible {
+  outline: 2px solid #5b7ea4;
+  outline-offset: 3px;
+  border-radius: 10px;
+}
+
+.preview-frame-button .preview-frame {
+  position: relative;
+}
+
+.preview-play-icon {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.preview-play-circle {
+  width: 2.6rem;
+  height: 2.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.48);
+  border-radius: 50%;
+  color: #fff;
+  font-size: 1rem;
+  padding-left: 3px;
+  backdrop-filter: blur(2px);
+  transition:
+    background 120ms ease,
+    transform 120ms ease;
+}
+
+.preview-frame-button:hover .preview-play-circle {
+  background: rgba(0, 0, 0, 0.65);
+  transform: scale(1.1);
+}
+
+/* Video lightbox */
+.video-lightbox-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.74);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.video-lightbox {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: min(90vw, 680px);
+  max-height: 90vh;
+  background: #111;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.07);
+}
+
+.video-lightbox-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #1c1c1c;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.video-lightbox-filename {
+  font-size: 0.88rem;
+  color: #b0b0b0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+
+.video-lightbox-close {
+  flex-shrink: 0;
+  min-height: 34px;
+  padding: 5px 14px;
+  border: 1px solid #444;
+  border-radius: 8px;
+  background: #2d2d2d;
+  color: #ccc;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+
+.video-lightbox-close:hover {
+  background: #3c3c3c;
+  color: #fff;
+}
+
+.video-lightbox-close:focus-visible {
+  outline: 2px solid #5b7ea4;
+  outline-offset: 2px;
+}
+
+.video-lightbox-video {
+  display: block;
+  width: 100%;
+  max-height: calc(90vh - 56px);
+  background: #000;
+}
+
 /* GIF-to-MP4 conversion toggle */
 .convert-gif-toggle {
   display: flex;

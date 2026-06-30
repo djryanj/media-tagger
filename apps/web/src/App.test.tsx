@@ -111,10 +111,12 @@ describe("App", () => {
       uploadedFile,
     );
 
-    // Should render a <video> element with the correct aria-label
-    const video = screen.getByLabelText("Preview of sample.mp4");
-    expect(video).toBeVisible();
-    expect(video.tagName.toLowerCase()).toBe("video");
+    // Should render a clickable preview button containing a <video> element
+    const previewButton = screen.getByRole("button", {
+      name: "Open video preview for sample.mp4",
+    });
+    expect(previewButton).toBeVisible();
+    expect(previewButton.querySelector("video")).not.toBeNull();
   });
 
   it("requires a file and tags before submitting", async () => {
@@ -378,7 +380,11 @@ describe("App", () => {
       screen.getByRole("button", { name: "Tag images individually" }),
     );
 
-    expect(screen.getByLabelText("Preview of sample.mp4")).toBeVisible();
+    expect(
+      screen.getByRole("button", {
+        name: "Open video preview for sample.mp4",
+      }),
+    ).toBeVisible();
     expect(
       screen.queryByLabelText("No preview available for sample.mp4"),
     ).toBeNull();

@@ -67,6 +67,7 @@ export default function App() {
   >("loading");
   const [warningMessages, setWarningMessages] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [lightboxFile, setLightboxFile] = useState<File | null>(null);
   const [convertGifsToMp4, setConvertGifsToMp4] = useState(true);
   const [perFileConvertGif, setPerFileConvertGif] = useState<
     Record<string, boolean>
@@ -582,18 +583,34 @@ export default function App() {
     const showVideoPreview =
       (options?.allowVideoPreview ?? true) && videoDetected && previewUrl;
 
+    if (showVideoPreview) {
+      return (
+        <button
+          aria-label={`Open video preview for ${file.name}`}
+          className="preview-frame-button"
+          onClick={() => setLightboxFile(file)}
+          type="button"
+        >
+          <div className="preview-frame">
+            <video
+              aria-hidden="true"
+              className="preview-image"
+              muted
+              playsInline
+              preload="metadata"
+              src={previewUrl}
+            />
+            <div aria-hidden="true" className="preview-play-icon">
+              <div className="preview-play-circle">&#9654;</div>
+            </div>
+          </div>
+        </button>
+      );
+    }
+
     return (
       <div className="preview-frame">
-        {showVideoPreview ? (
-          <video
-            aria-label={`Preview of ${file.name}`}
-            className="preview-image"
-            muted
-            playsInline
-            preload="metadata"
-            src={previewUrl}
-          />
-        ) : previewUrl ? (
+        {previewUrl ? (
           <img
             alt={`Preview of ${file.name}`}
             className="preview-image"
@@ -738,8 +755,18 @@ export default function App() {
     setStatus("Ready for upload.");
   }
 
+  const lightboxPreviewUrl =
+    lightboxFile ? (previewUrls[buildFileId(lightboxFile)] ?? null) : null;
+
   return (
     <main className="app-shell">
+      {lightboxFile && lightboxPreviewUrl ? (
+        <VideoLightbox
+          file={lightboxFile}
+          onClose={() => setLightboxFile(null)}
+          previewUrl={lightboxPreviewUrl}
+        />
+      ) : null}
       <section className="app-panel">
         <header className="panel-header">
           <h1>Media Tagger</h1>
@@ -1133,6 +1160,59 @@ export default function App() {
         </footer>
       </section>
     </main>
+  );
+}
+
+function VideoLightbox({
+  file,
+  previewUrl,
+  onClose,
+}: {
+  file: File;
+  previewUrl: string;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div
+      aria-label={`Video preview for ${file.name}`}
+      aria-modal="true"
+      className="video-lightbox-backdrop"
+      onClick={onClose}
+      role="dialog"
+    >
+      <div
+        className="video-lightbox"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="video-lightbox-header">
+          <span className="video-lightbox-filename" title={file.name}>
+            {file.name}
+          </span>
+          <button
+            autoFocus
+            className="video-lightbox-close"
+            onClick={onClose}
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+        <video
+          className="video-lightbox-video"
+          controls
+          playsInline
+          src={previewUrl}
+        />
+      </div>
+    </div>
   );
 }
 
