@@ -183,7 +183,9 @@ test("shows an MP4 preview in individual mode", async ({ page }) => {
 
     await expect(page.locator(".individual-tags-card")).toBeVisible();
 
-    const videoPreview = page.locator(`video[aria-label="Preview of ${filename}"]`);
+    const videoPreview = page.getByRole("button", {
+      name: `Open video preview for ${filename}`,
+    });
     await expect(videoPreview).toBeVisible();
   } finally {
     await rm(temporaryDirectory, { force: true, recursive: true });

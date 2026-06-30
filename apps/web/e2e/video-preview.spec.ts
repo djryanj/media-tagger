@@ -29,13 +29,13 @@ test("shows a video preview for MP4 in shared mode", async ({ page }) => {
   await page.goto("/");
   await page.locator("#media-file").setInputFiles(mp4Path);
 
-  // Should render a <video> element with the correct aria-label
-  const video = page.getByLabel("Preview of preview-test.mp4");
-  await expect(video).toBeVisible();
-  await expect(video).toHaveAttribute("src", /blob:/);
+  // Should render a clickable preview button containing a <video> element
+  const previewButton = page.getByLabel("Open video preview for preview-test.mp4");
+  await expect(previewButton).toBeVisible();
+  await expect(previewButton.locator("video")).toHaveAttribute("src", /blob:/);
 
   // Should not render an <img> for this file
   await expect(
-    page.getByRole("img", { name: "Preview of preview-test.mp4" }),
+    page.getByRole("img", { name: /preview-test\.mp4/i }),
   ).toHaveCount(0);
 });
