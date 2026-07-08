@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project uses semantic version tags for releases.
 
+## [0.5.1] - Unreleased
+
+### Changed
+
+- chore(deps): bump docker/metadata-action from 6.1.0 to 6.2.0 ([#74](https://github.com/djryanj/media-tagger/pull/74))
+
 ## [0.5.0] - 2026-06-30
 
 ### Changed
