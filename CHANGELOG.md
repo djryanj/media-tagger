@@ -8,6 +8,7 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ### Changed
 
+- chore(deps): bump docker/setup-qemu-action from 4.1.0 to 4.2.0 ([#77](https://github.com/djryanj/media-tagger/pull/77))
 - chore(deps): bump docker/build-push-action from 7.2.0 to 7.3.0 ([#78](https://github.com/djryanj/media-tagger/pull/78))
 - chore(deps-dev): bump tsx from 4.21.0 to 4.23.0 ([#79](https://github.com/djryanj/media-tagger/pull/79))
 - chore(deps-dev): bump @types/react from 19.2.14 to 19.2.17 ([#80](https://github.com/djryanj/media-tagger/pull/80))
