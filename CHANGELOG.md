@@ -8,6 +8,7 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ### Changed
 
+- chore(deps-dev): bump @types/react from 19.2.14 to 19.2.17 ([#80](https://github.com/djryanj/media-tagger/pull/80))
 - chore(deps-dev): bump eslint from 10.2.0 to 10.6.0 ([#81](https://github.com/djryanj/media-tagger/pull/81))
 - chore(deps-dev): bump vite from 8.1.1 to 8.1.3 ([#82](https://github.com/djryanj/media-tagger/pull/82))
 - chore(deps-dev): bump eslint-plugin-react-refresh from 0.5.2 to 0.5.3 ([#83](https://github.com/djryanj/media-tagger/pull/83))
