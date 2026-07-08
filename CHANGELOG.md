@@ -8,6 +8,7 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ### Changed
 
+- chore(deps-dev): bump eslint-plugin-react-refresh from 0.5.2 to 0.5.3 ([#83](https://github.com/djryanj/media-tagger/pull/83))
 - chore(deps): bump docker/metadata-action from 6.1.0 to 6.2.0 ([#74](https://github.com/djryanj/media-tagger/pull/74))
 
 ## [0.5.0] - 2026-06-30
