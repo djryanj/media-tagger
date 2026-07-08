@@ -4,11 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project uses semantic version tags for releases.
 
-## [0.5.0] - 2026-06-30
+## [0.5.1] - Unreleased
 
 ### Changed
 
 - chore(deps): bump docker/metadata-action from 6.1.0 to 6.2.0 ([#74](https://github.com/djryanj/media-tagger/pull/74))
+
+## [0.5.0] - 2026-06-30
+
+### Changed
+
 - chore(deps): bump docker/build-push-action from 7.1.0 to 7.2.0 ([#69](https://github.com/djryanj/media-tagger/pull/69))
 - chore(deps): bump docker/metadata-action from 6.0.0 to 6.1.0 ([#70](https://github.com/djryanj/media-tagger/pull/70))
 - chore(deps): bump docker/setup-qemu-action from 4.0.0 to 4.1.0 ([#68](https://github.com/djryanj/media-tagger/pull/68))
