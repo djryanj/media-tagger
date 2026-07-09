@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, useEffect, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 
 type GifTagStreamDoneEvent = {
   type: "done";
@@ -1172,6 +1172,11 @@ function VideoLightbox({
   previewUrl: string;
   onClose: () => void;
 }) {
+  const [zoom, setZoom] = useState(1);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const pinchStartDistRef = useRef<number | null>(null);
+  const pinchStartZoomRef = useRef<number>(1);
+
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -1179,6 +1184,23 @@ function VideoLightbox({
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
+
+  // Non-passive touchmove so we can preventDefault on pinch to block browser zoom.
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    function handleTouchMove(e: TouchEvent) {
+      if (e.touches.length !== 2 || pinchStartDistRef.current === null) return;
+      e.preventDefault();
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.hypot(dx, dy);
+      const raw = pinchStartZoomRef.current * (dist / pinchStartDistRef.current);
+      setZoom(Math.round(Math.min(4, Math.max(1, raw)) * 10) / 10);
+    }
+    el.addEventListener("touchmove", handleTouchMove, { passive: false });
+    return () => el.removeEventListener("touchmove", handleTouchMove);
+  }, []);
 
   return (
     <div
@@ -1205,13 +1227,60 @@ function VideoLightbox({
             Close
           </button>
         </div>
-        <video
-          autoPlay
-          className="video-lightbox-video"
-          controls
-          playsInline
-          src={previewUrl}
-        />
+        <div
+          className="video-lightbox-video-wrapper"
+          onTouchEnd={() => {
+            pinchStartDistRef.current = null;
+          }}
+          onTouchStart={(e) => {
+            if (e.touches.length === 2) {
+              const dx = e.touches[0].clientX - e.touches[1].clientX;
+              const dy = e.touches[0].clientY - e.touches[1].clientY;
+              pinchStartDistRef.current = Math.hypot(dx, dy);
+              pinchStartZoomRef.current = zoom;
+            }
+          }}
+          ref={wrapperRef}
+        >
+          <video
+            autoPlay
+            className="video-lightbox-video"
+            controls
+            playsInline
+            src={previewUrl}
+            style={zoom !== 1 ? { width: `${zoom * 100}%` } : undefined}
+          />
+        </div>
+        <div className="video-lightbox-footer">
+          <button
+            aria-label="Zoom out"
+            className="video-lightbox-zoom-btn"
+            disabled={zoom <= 1}
+            onClick={() => setZoom((z) => Math.max(Math.round((z - 0.5) * 10) / 10, 1))}
+            type="button"
+          >
+            −
+          </button>
+          <button
+            aria-label="Reset zoom"
+            aria-live="polite"
+            className="video-lightbox-zoom-level"
+            disabled={zoom === 1}
+            onClick={() => setZoom(1)}
+            type="button"
+          >
+            {Math.round(zoom * 100)}%
+          </button>
+          <button
+            aria-label="Zoom in"
+            className="video-lightbox-zoom-btn"
+            disabled={zoom >= 4}
+            onClick={() => setZoom((z) => Math.min(Math.round((z + 0.5) * 10) / 10, 4))}
+            type="button"
+          >
+            +
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -147,6 +147,59 @@ describe("App", () => {
     expect(lightboxVideo).toHaveAttribute("autoplay");
   });
 
+  it("zoom controls in the lightbox footer adjust video width and clamp at min/max", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(buildConfigResponse());
+    const uploadedFile = new File(["mp4-data"], "sample.mp4", {
+      type: "video/mp4",
+    });
+
+    render(<App />);
+    await screen.findByText("The server accepts files up to 1 GB.");
+
+    await user.upload(
+      screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+      uploadedFile,
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Open video preview for sample.mp4" }),
+    );
+
+    const dialog = screen.getByRole("dialog", {
+      name: "Video preview for sample.mp4",
+    });
+    const zoomIn = screen.getByRole("button", { name: "Zoom in" });
+    const zoomOut = screen.getByRole("button", { name: "Zoom out" });
+    const resetZoom = screen.getByRole("button", { name: "Reset zoom" });
+    const video = dialog.querySelector("video") as HTMLVideoElement;
+
+    // Initially at 100%: zoom out and reset disabled, no inline width
+    expect(screen.getByText("100%")).toBeVisible();
+    expect(zoomOut).toBeDisabled();
+    expect(resetZoom).toBeDisabled();
+    expect(zoomIn).not.toBeDisabled();
+    expect(video.style.width).toBe("");
+
+    // Zoom in once → 150%
+    await user.click(zoomIn);
+    expect(screen.getByText("150%")).toBeVisible();
+    expect(video.style.width).toBe("150%");
+    expect(zoomOut).not.toBeDisabled();
+    expect(resetZoom).not.toBeDisabled();
+
+    // Reset zoom via the level button → back to 100%
+    await user.click(resetZoom);
+    expect(screen.getByText("100%")).toBeVisible();
+    expect(video.style.width).toBe("");
+    expect(resetZoom).toBeDisabled();
+
+    // Zoom in to max (4x = 400%) — takes 6 clicks from 100%
+    for (let i = 0; i < 6; i++) await user.click(zoomIn);
+    expect(screen.getByText("400%")).toBeVisible();
+    expect(zoomIn).toBeDisabled();
+  });
+
   it("requires a file and tags before submitting", async () => {
     const user = userEvent.setup();
     const fetchMock = vi.mocked(fetch);
