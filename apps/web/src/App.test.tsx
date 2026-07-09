@@ -119,6 +119,34 @@ describe("App", () => {
     expect(previewButton.querySelector("video")).not.toBeNull();
   });
 
+  it("auto-plays video in the lightbox when preview is clicked in shared mode", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(buildConfigResponse());
+    const uploadedFile = new File(["mp4-data"], "sample.mp4", {
+      type: "video/mp4",
+    });
+
+    render(<App />);
+    await screen.findByText("The server accepts files up to 1 GB.");
+
+    await user.upload(
+      screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+      uploadedFile,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Open video preview for sample.mp4" }),
+    );
+
+    const dialog = screen.getByRole("dialog", {
+      name: "Video preview for sample.mp4",
+    });
+    const lightboxVideo = dialog.querySelector("video");
+    expect(lightboxVideo).not.toBeNull();
+    expect(lightboxVideo).toHaveAttribute("autoplay");
+  });
+
   it("requires a file and tags before submitting", async () => {
     const user = userEvent.setup();
     const fetchMock = vi.mocked(fetch);
@@ -388,6 +416,38 @@ describe("App", () => {
     expect(
       screen.queryByLabelText("No preview available for sample.mp4"),
     ).toBeNull();
+  });
+
+  it("auto-plays video in the lightbox when preview is clicked in individual mode", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.mocked(fetch);
+    const uploadedFile = new File(["mp4-data"], "sample.mp4", {
+      type: "video/mp4",
+    });
+
+    fetchMock.mockResolvedValueOnce(buildConfigResponse());
+
+    render(<App />);
+    await screen.findByText("The server accepts files up to 1 GB.");
+
+    await user.upload(
+      screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+      uploadedFile,
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Tag images individually" }),
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Open video preview for sample.mp4" }),
+    );
+
+    const dialog = screen.getByRole("dialog", {
+      name: "Video preview for sample.mp4",
+    });
+    const lightboxVideo = dialog.querySelector("video");
+    expect(lightboxVideo).not.toBeNull();
+    expect(lightboxVideo).toHaveAttribute("autoplay");
   });
 
   it("keeps long filenames usable in individual mode", async () => {

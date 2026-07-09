@@ -1206,6 +1206,7 @@ function VideoLightbox({
           </button>
         </div>
         <video
+          autoPlay
           className="video-lightbox-video"
           controls
           playsInline

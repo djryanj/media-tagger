@@ -6,6 +6,10 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ## [0.5.1] - Unreleased
 
+### Fixed
+
+- Video previews now auto-play when the lightbox is opened.
+
 ### Changed
 
 - chore(deps): bump docker/setup-buildx-action from 4.0.0 to 4.2.0 ([#75](https://github.com/djryanj/media-tagger/pull/75))
