@@ -13,6 +13,7 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ### Changed
 
+- chore(deps-dev): bump vite from 8.1.3 to 8.1.4 ([#93](https://github.com/djryanj/media-tagger/pull/93))
 - chore(deps): bump @fastify/static from 9.1.3 to 9.3.0 ([#94](https://github.com/djryanj/media-tagger/pull/94))
 - chore(deps): bump @fastify/cors from 11.2.0 to 11.3.0 ([#95](https://github.com/djryanj/media-tagger/pull/95))
 - chore(deps): bump docker/setup-buildx-action from 4.0.0 to 4.2.0 ([#75](https://github.com/djryanj/media-tagger/pull/75))
