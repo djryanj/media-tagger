@@ -13,6 +13,7 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ### Changed
 
+- chore(deps): bump actions/labeler from 6.1.0 to 6.2.0 ([#89](https://github.com/djryanj/media-tagger/pull/89))
 - chore(deps): bump dorny/paths-filter from 4.0.1 to 4.0.2 ([#88](https://github.com/djryanj/media-tagger/pull/88))
 - chore(deps): bump renovatebot/github-action from 46.1.17 to 46.1.18 ([#87](https://github.com/djryanj/media-tagger/pull/87))
 - chore(deps-dev): bump vite from 8.1.3 to 8.1.4 ([#93](https://github.com/djryanj/media-tagger/pull/93))
