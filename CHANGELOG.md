@@ -13,6 +13,7 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ### Changed
 
+- chore(deps): bump @fastify/cors from 11.2.0 to 11.3.0 ([#95](https://github.com/djryanj/media-tagger/pull/95))
 - chore(deps): bump docker/setup-buildx-action from 4.0.0 to 4.2.0 ([#75](https://github.com/djryanj/media-tagger/pull/75))
 - chore(deps): bump actions/checkout from 6.0.2 to 7.0.0 ([#76](https://github.com/djryanj/media-tagger/pull/76))
 - chore(deps): bump docker/setup-qemu-action from 4.1.0 to 4.2.0 ([#77](https://github.com/djryanj/media-tagger/pull/77))
