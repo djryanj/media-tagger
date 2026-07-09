@@ -8,7 +8,8 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ### Fixed
 
-- Video previews now auto-play when the lightbox is opened.
+- Video previews now auto-play when the lightbox is opened. [#84](https://github.com/djryanj/media-tagger/issues/84)
+- Video previews can be zoomed in/out using controls in the lightbox header. [#85](https://github.com/djryanj/media-tagger/issues/85)
 
 ### Changed
 
