@@ -13,6 +13,7 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ### Changed
 
+- chore(deps-dev): bump typescript-eslint from 8.62.1 to 8.64.0 ([#100](https://github.com/djryanj/media-tagger/pull/100))
 - chore(deps-dev): bump @vitejs/plugin-react from 6.0.1 to 6.0.3 ([#91](https://github.com/djryanj/media-tagger/pull/91))
 - chore(deps): bump docker/login-action from 4.1.0 to 4.4.0 ([#90](https://github.com/djryanj/media-tagger/pull/90))
 - chore(deps): bump actions/labeler from 6.1.0 to 6.2.0 ([#89](https://github.com/djryanj/media-tagger/pull/89))
