@@ -8,6 +8,7 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ### Changed
 
+- chore(deps): bump actions/checkout from 7.0.0 to 7.0.1 ([#104](https://github.com/djryanj/media-tagger/pull/104))
 - chore(deps): bump actions/labeler from 6.2.0 to 7.0.0 ([#105](https://github.com/djryanj/media-tagger/pull/105))
 
 ## [0.5.1] - 2026-07-09
