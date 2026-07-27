@@ -8,6 +8,7 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ### Changed
 
+- chore(deps): bump renovatebot/github-action from 46.1.18 to 46.1.21 ([#98](https://github.com/djryanj/media-tagger/pull/98))
 - chore(deps): bump actions/setup-node from 6.4.0 to 7.0.0 ([#99](https://github.com/djryanj/media-tagger/pull/99))
 - chore(deps-dev): bump typescript-eslint from 8.62.1 to 8.65.0 ([#100](https://github.com/djryanj/media-tagger/pull/100))
 - chore(deps-dev): bump @playwright/test from 1.59.1 to 1.62.0 ([#101](https://github.com/djryanj/media-tagger/pull/101))
