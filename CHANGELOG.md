@@ -4,14 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project uses semantic version tags for releases.
 
+## [0.5.2] - Unreleased
+
+### Changed
+
+- chore(deps): bump actions/labeler from 6.2.0 to 7.0.0 ([#105](https://github.com/djryanj/media-tagger/pull/105))
+
 ## [0.5.1] - 2026-07-09
 
 ### Fixed
 
 - Video previews now auto-play when the lightbox is opened. [#84](https://github.com/djryanj/media-tagger/issues/84)
 - Video previews can be zoomed in/out using controls in the lightbox header. [#85](https://github.com/djryanj/media-tagger/issues/85)
-
-### Changed
 
 - chore(deps-dev): bump @vitejs/plugin-react from 6.0.1 to 6.0.3 ([#91](https://github.com/djryanj/media-tagger/pull/91))
 - chore(deps): bump docker/login-action from 4.1.0 to 4.4.0 ([#90](https://github.com/djryanj/media-tagger/pull/90))
