@@ -8,6 +8,7 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ### Changed
 
+- chore(deps-dev): bump typescript-eslint from 8.62.1 to 8.65.0 ([#100](https://github.com/djryanj/media-tagger/pull/100))
 - chore(deps-dev): bump @playwright/test from 1.59.1 to 1.62.0 ([#101](https://github.com/djryanj/media-tagger/pull/101))
 - chore(deps): bump fastify from 5.8.5 to 5.10.0 ([#102](https://github.com/djryanj/media-tagger/pull/102))
 - chore(deps): bump @fastify/multipart from 10.0.0 to 10.1.0 ([#103](https://github.com/djryanj/media-tagger/pull/103))
