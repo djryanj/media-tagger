@@ -113,14 +113,15 @@ export async function runMultiFileRoundTrip(
     );
 
     await expect(page.getByText("Downloaded 2 of 2 files.")).toBeVisible();
-    const processedFiles = page.getByLabel("Processed files");
-    const firstManualDownloadButton = processedFiles
-      .getByRole("button", { name: "Download" })
-      .first();
+    const downloadManager = page.getByLabel("Downloads");
+    const manualDownloadButtons = downloadManager.locator(
+      ".download-item-download",
+    );
 
-    await expect(processedFiles).toBeVisible();
-    await expect(processedFiles.getByRole("button", { name: "Download" })).toHaveCount(2);
-    await firstManualDownloadButton.evaluate((button) => {
+    await expect(downloadManager).toBeVisible();
+    await expect(manualDownloadButtons).toHaveCount(2);
+    await expect(downloadManager.locator(".download-item-downloaded")).toHaveCount(2);
+    await manualDownloadButtons.first().evaluate((button) => {
       (button as HTMLButtonElement).click();
     });
     await expect(

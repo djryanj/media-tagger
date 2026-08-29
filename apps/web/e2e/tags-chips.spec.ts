@@ -12,14 +12,16 @@ test.describe('Tag chips and download UI', () => {
       await page.setInputFiles('input[type="file"]', 'e2e/fixtures/sample.jpg');
       // Enter tags with blank pipe expansion
       await page.fill('textarea#media-tags', 'large trees|, large |trees');
-      // Chips should not be visible before upload
-      await expect(page.locator('.confirmed-tags-block')).toHaveCount(0);
+      // Server-confirmed chips only exist once a file has been processed
+      await expect(page.getByLabel('Downloads')).toHaveCount(0);
       // Submit
       await submitButton.click({ force: true });
-      // Wait for chips to appear
-      await expect(page.locator('.confirmed-tags-block')).toBeVisible();
-      await expect(page.getByText('large', { exact: true })).toBeVisible();
-      await expect(page.locator('.tag-chip', { hasText: 'large trees' })).toBeVisible();
+      // Expand the download row to reveal the tags the server applied
+      await page.getByRole('button', { name: /^Toggle details for / }).click();
+
+      const appliedTags = page.locator('.download-item .tag-chips-row');
+      await expect(appliedTags.locator('.tag-chip', { hasText: /^large$/ })).toBeVisible();
+      await expect(appliedTags.locator('.tag-chip', { hasText: 'large trees' })).toBeVisible();
     });
   test('shows confirmed tag chips after upload with pipe expansion', async ({ page }) => {
     await page.goto('/');
@@ -30,16 +32,15 @@ test.describe('Tag chips and download UI', () => {
     await page.setInputFiles('input[type="file"]', 'e2e/fixtures/sample.jpg');
     // Enter tags with pipe expansion
     await page.fill('textarea#media-tags', 'big|huge trees, small|large pots');
-    // Chips should not be visible before upload
-    await expect(page.locator('.confirmed-tags-block')).toHaveCount(0);
     // Submit
     await submitButton.click({ force: true });
-    // Wait for chips to appear
-    await expect(page.locator('.confirmed-tags-block')).toBeVisible();
-    await expect(page.locator('.tag-chip', { hasText: 'big trees' })).toBeVisible();
-    await expect(page.locator('.tag-chip', { hasText: 'huge trees' })).toBeVisible();
-    await expect(page.locator('.tag-chip', { hasText: 'small pots' })).toBeVisible();
-    await expect(page.locator('.tag-chip', { hasText: 'large pots' })).toBeVisible();
+    await page.getByRole('button', { name: /^Toggle details for / }).click();
+
+    const appliedTags = page.locator('.download-item .tag-chips-row');
+    await expect(appliedTags.locator('.tag-chip', { hasText: 'big trees' })).toBeVisible();
+    await expect(appliedTags.locator('.tag-chip', { hasText: 'huge trees' })).toBeVisible();
+    await expect(appliedTags.locator('.tag-chip', { hasText: 'small pots' })).toBeVisible();
+    await expect(appliedTags.locator('.tag-chip', { hasText: 'large pots' })).toBeVisible();
   });
 
   test('handles long filenames in download UI', async ({ page }) => {
@@ -58,10 +59,12 @@ test.describe('Tag chips and download UI', () => {
     });
     await page.fill('textarea#media-tags', 'test');
     await submitButton.click({ force: true });
-    // Wait for download result
-    await expect(page.locator('.download-result-name')).toBeVisible();
+    // Wait for the download row, then expand it to reveal the saved filename
+    await expect(page.locator('.download-item')).toBeVisible();
+    await page.getByRole('button', { name: `Toggle details for ${longName}` }).click();
     // Should ellipsize and have a tooltip
     const nameEl = page.locator('.download-result-name');
+    await expect(nameEl).toBeVisible();
     await expect(nameEl).toHaveAttribute('title', new RegExp(longName));
     // Should not overflow container
     const box = await nameEl.boundingBox();

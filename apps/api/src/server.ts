@@ -13,6 +13,7 @@ import Fastify, { FastifyReply, FastifyRequest } from "fastify";
 import { getServerRuntimeConfig } from "./config.js";
 import { GifConversionError, convertGifToMp4 } from "./gifConversion.js";
 import { UnsupportedMediaError, sanitizeFilename } from "./media.js";
+import { PngConversionError, convertPngToJpg } from "./pngConversion.js";
 import {
   MetadataWriteError,
   detectMediaType,
@@ -44,6 +45,7 @@ export function buildServer(
     origin: true,
     exposedHeaders: [
       "content-disposition",
+      "x-media-tagger-confirmed-tags",
       "x-media-tagger-file-resolution",
     ],
   });
@@ -261,6 +263,7 @@ export function buildServer(
       let declaredFileSize: number | null = null;
       let mimetype = "application/octet-stream";
       let rawTags = "";
+      let convertPng = false;
       let upload:
         | Awaited<ReturnType<typeof consumeUploadedFile>>
         | null = null;
@@ -290,6 +293,10 @@ export function buildServer(
 
           if (part.fieldname === "fileSize") {
             declaredFileSize = parseDeclaredFileSize(String(part.value ?? ""));
+          }
+
+          if (part.fieldname === "convertPngToJpg") {
+            convertPng = String(part.value) === "true";
           }
         }
       } catch (error) {
@@ -328,8 +335,13 @@ export function buildServer(
         "Received media tagging request.",
       );
 
+      // Converting requires the bytes on disk for FFmpeg, so an in-memory
+      // upload is spilled to a temporary directory first.
+      const shouldTagOnDisk = convertPng || upload.processingMode === "disk";
+      let spilledWorkingDirectory: string | null = null;
+
       try {
-        if (upload.processingMode === "memory") {
+        if (!shouldTagOnDisk) {
           const taggedMedia = await writeTaggedMediaFromBuffer({
             buffer: upload.buffer as Buffer,
             filename,
@@ -371,10 +383,62 @@ export function buildServer(
           return reply.send(taggedMedia.buffer);
         }
 
+        let workingInputPath: string;
+
+        if (upload.processingMode === "memory") {
+          spilledWorkingDirectory = await mkdtemp(
+            join(tmpdir(), "media-tagger-convert-"),
+          );
+          workingInputPath = join(
+            spilledWorkingDirectory,
+            sanitizeFilename(filename),
+          );
+          await writeFile(workingInputPath, upload.buffer as Buffer);
+        } else {
+          workingInputPath = upload.inputPath as string;
+        }
+
+        let tagInputPath = workingInputPath;
+        let tagFilename = filename;
+        let tagMimetype = mimetype;
+
+        if (convertPng) {
+          const detectedMedia = await detectMediaType(workingInputPath);
+
+          if (detectedMedia.extension === "png") {
+            const jpgFilename = replaceFileExtension(
+              sanitizeFilename(filename),
+              ".jpg",
+            );
+            // The source may already own the .jpg name (a disguised PNG), so
+            // FFmpeg writes to a distinct path and writeTaggedMedia renames it.
+            const jpgPath = join(
+              dirname(workingInputPath),
+              `converted-${jpgFilename}`,
+            );
+
+            request.log.info({ filename, jpgFilename }, "Converting PNG to JPG.");
+
+            await convertPngToJpg({
+              inputPath: workingInputPath,
+              outputPath: jpgPath,
+            });
+
+            tagInputPath = jpgPath;
+            tagFilename = jpgFilename;
+            tagMimetype = "image/jpeg";
+          } else {
+            request.log.info(
+              { filename, detectedExtension: detectedMedia.extension },
+              "convertPngToJpg requested but file is not a PNG; tagging as-is.",
+            );
+          }
+        }
+
         const taggedMedia = await writeTaggedMedia({
-          filename,
-          inputPath: upload.inputPath as string,
-          mimetype,
+          filename: tagFilename,
+          inputPath: tagInputPath,
+          mimetype: tagMimetype,
           payload,
         });
 
@@ -425,11 +489,18 @@ export function buildServer(
 
         return reply.send(createReadStream(taggedMedia.outputPath));
       } catch (error) {
+        if (spilledWorkingDirectory) {
+          await rm(spilledWorkingDirectory, { force: true, recursive: true });
+        }
+
         if (error instanceof UnsupportedMediaError) {
           return reply.code(415).send({ error: error.message });
         }
 
-        if (error instanceof MetadataWriteError) {
+        if (
+          error instanceof MetadataWriteError ||
+          error instanceof PngConversionError
+        ) {
           request.log.error(error);
           return reply.code(422).send({ error: error.message });
         }
@@ -454,6 +525,16 @@ export function buildServer(
   }
 
   return app;
+}
+
+function replaceFileExtension(filename: string, extension: string): string {
+  const currentExtension = extname(filename);
+
+  if (!currentExtension) {
+    return `${filename}${extension}`;
+  }
+
+  return `${filename.slice(0, -currentExtension.length)}${extension}`;
 }
 
 async function start() {

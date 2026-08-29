@@ -12,13 +12,35 @@ The core workflow is intentionally narrow:
 
 1. Upload up to 20 supported media files.
 2. Choose shared or individual tagging mode.
-3. Enter shared tags or per-file tags.
+3. Enter shared tags or per-file tags, checking the live tag preview under each input.
 4. Render the payload in the exact shape `tags:<csv list of tags>`.
-5. Download each updated file individually in the browser.
+5. Download each updated file individually in the browser, tracked in the download manager.
 
 ## Supported Formats
 
 The current supported set for metadata writing is JPG, JPEG, PNG, WebP, GIF, MP4, and MOV.
+
+## Tag Preview
+
+Every tags input has a live preview underneath it that shows the exact tags that will be written, including the result of any pipe expansion, plus the resulting tag count. `big|huge trees` previews as `big trees` and `huge trees`; `large trees|` previews as `large` and `large trees`. Duplicates are removed case-insensitively. The preview runs the same normalization the server does, so what the preview shows is what gets written.
+
+## Download Manager
+
+Submitting fills the download manager at the bottom of the screen with a row for every queued file, so on a slow connection or a large batch it is always clear what is done and what is pending. Each row shows a thumbnail of the source file, its filename, and its current status:
+
+| Status | Meaning |
+| --- | --- |
+| `Queued` | Waiting for the files ahead of it. |
+| `Converting to MP4...` | FFmpeg is re-encoding a GIF, with live percentage and a progress bar. |
+| `Writing metadata...` | Uploaded, exiftool is writing and verifying the payload. |
+| `Downloaded` | The browser download was triggered; the row turns light green. |
+| `Failed` | The row turns light red and the reason is shown in the expanded row. |
+
+Automatic download is attempted as soon as a file finishes. Every row also carries its own download button for devices that delay or block the automatic download. Expanding a row shows the filename the result saves as, the tags the server confirmed for that file, and any failure message.
+
+## Image and Video Previews
+
+Tapping a thumbnail in the tagging form opens a lightbox for both images and videos, with zoom buttons and pinch-to-zoom (up to 4x). Videos auto-play with controls in the lightbox.
 
 ## GIF to MP4 Conversion
 
@@ -35,7 +57,23 @@ To keep a GIF as-is, uncheck the toggle before submitting.
 
 ### Disguised GIFs
 
-Some files carry a `.jpg` or other non-GIF extension but are actually GIF data. Media Tagger reads the first six bytes of every selected image file in the browser and checks for the `GIF87a` / `GIF89a` magic signature. Files that match are treated as GIFs — the conversion toggle appears for them and they are routed through the same FFmpeg path. The server also re-checks the actual file type independently, so a genuinely non-GIF file is always tagged in its original format even if the conversion flag is sent.
+Some files carry a `.jpg` or other non-GIF extension but are actually GIF data. Media Tagger reads the first bytes of every selected image file in the browser and checks for the `GIF87a` / `GIF89a` magic signature. Files that match are treated as GIFs — the conversion toggle appears for them and they are routed through the same FFmpeg path. The server also re-checks the actual file type independently, so a genuinely non-GIF file is always tagged in its original format even if the conversion flag is sent.
+
+## PNG to JPG Conversion
+
+PNG files are often far larger than an equivalent JPEG with no visible benefit, so Media Tagger can optionally re-encode them as JPG before writing metadata. The conversion uses FFmpeg's mjpeg encoder at `-q:v 2` with the `yuvj420p` pixel format.
+
+The option defaults to **disabled**, because unlike the GIF-to-MP4 path it is lossy and discards data:
+
+- JPEG has no alpha channel, so transparency is flattened onto a **white** background.
+- The re-encode is lossy, so a PNG kept as a lossless master should not be converted.
+
+Enable it per submission:
+
+- In **shared tagging mode**, a toggle appears in the form whenever at least one PNG is selected.
+- In **individual tagging mode**, each PNG file has its own per-file checkbox.
+
+The downloaded file is named with a `.jpg` extension and has the tag payload written into its metadata after conversion. As with GIFs, the browser checks the `\x89PNG` magic signature, so a `.jpg` that is really a PNG is offered the option, and the server re-checks the uploaded bytes so a file that is not really a PNG is tagged in its original format even if the flag is sent.
 
 ## Stack
 

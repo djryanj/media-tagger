@@ -4,9 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project uses semantic version tags for releases.
 
-## [0.5.2] - Unreleased
+## [0.6.0] - Unreleased
+
+### Added
+
+- A download manager replaces the previous list of download buttons. Submitting now fills the list immediately with every queued file instead of adding one row per file as it finishes. Each row is collapsible and carries a thumbnail preview of the source file, a live status (`Queued`, `Converting to MP4...`, `Writing metadata...`, `Downloaded`, `Failed`), and its own download button for when a device delays or blocks the automatic download. GIF-to-MP4 conversion progress now appears in the row for the file being converted. A row turns light green once its file has been downloaded successfully and light red when it failed, with the failure reason inside the expanded row. Expanding a row also shows the saved filename and the tags the server confirmed for that file.
+- A live tag preview under every tags input shows exactly which tags a pipe cross-product will produce (for example `big|huge trees` previews as `big trees` and `huge trees`), together with the resulting tag count, before anything is uploaded. The preview uses the same normalization as the server, so what it shows is what gets written.
+- Images can now be opened in the zoomable lightbox that previously only handled videos, including the same zoom controls and pinch-to-zoom.
+- PNG files can optionally be converted to JPG on the server before metadata is written, mirroring the existing GIF-to-MP4 option. Conversion uses FFmpeg's mjpeg encoder at `-q:v 2` and composites the image over a white background, because JPEG has no alpha channel. The option is off by default, since the conversion is lossy and discards transparency: a toggle appears in shared tagging mode whenever a PNG is selected, and each PNG has a per-file checkbox in individual tagging mode. The server independently re-checks the uploaded bytes, so a file that is not really a PNG is tagged in its original format even if the flag is sent. PNG magic bytes are also detected in the browser, so a `.jpg` that is really a PNG still gets the option.
 
 ### Changed
+
+- The separate "Tags applied by the server" block was removed from the form. Confirmed tags are now shown per file inside its download manager row, and the live tag preview covers the pre-submit case.
 
 - chore(deps): bump renovatebot/github-action from 46.1.18 to 46.1.21 ([#98](https://github.com/djryanj/media-tagger/pull/98))
 - chore(deps): bump actions/setup-node from 6.4.0 to 7.0.0 ([#99](https://github.com/djryanj/media-tagger/pull/99))

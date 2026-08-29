@@ -411,47 +411,168 @@ h1 {
   opacity: 0.6;
 }
 
-.download-results {
+/* Download manager */
+.download-manager {
   display: grid;
   gap: 8px;
+  margin-top: 18px;
   min-width: 0 !important;
   max-width: 100% !important;
   width: 100% !important;
 }
 
-.download-results-header {
+.download-manager-header {
   display: grid;
   gap: 6px;
 }
 
-.download-results-header h2 {
+.download-manager-header h2 {
   margin: 0;
   font-size: 1.05rem;
 }
 
-.download-result-list {
+.download-item-list {
   display: grid;
   gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
   min-width: 0 !important;
   max-width: 100% !important;
   width: 100% !important;
 }
 
-.download-result-item {
+.download-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
-  padding: 12px 14px;
+  gap: 8px;
+  padding: 10px 12px;
   border: 1px solid #d6d6d6;
   border-radius: 12px;
   background: #ffffff;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease;
 }
 
-.download-result-copy {
+.download-item-downloaded {
+  border-color: #9dcb9d;
+  background: #edf8ed;
+}
+
+.download-item-failed {
+  border-color: #d9a79a;
+  background: #fdf0ec;
+}
+
+.download-item-summary {
   display: grid;
-  gap: 4px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
   min-width: 0;
+  max-width: 100%;
+}
+
+.download-item-toggle {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 4px;
+  border: none;
+  border-radius: 10px;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.download-item-toggle:focus-visible {
+  outline: 2px solid #5b7ea4;
+  outline-offset: 2px;
+}
+
+.download-item-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  flex-shrink: 0;
+  overflow: hidden;
+  border: 1px solid #d6d6d6;
+  border-radius: 8px;
+  background: #f1f3f5;
+}
+
+.download-item-thumb-media {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.download-item-thumb-placeholder {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #5c6470;
+}
+
+.download-item-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.download-item-status {
+  font-size: 0.88rem;
+  color: #5a6673;
+}
+
+.download-item-downloaded .download-item-status {
+  color: #2f6b34;
+  font-weight: 600;
+}
+
+.download-item-failed .download-item-status {
+  color: #a23b23;
+  font-weight: 600;
+}
+
+.download-item-chevron {
+  flex-shrink: 0;
+  padding: 0 4px;
+  color: #6c7683;
+}
+
+.download-item-download {
+  flex-shrink: 0;
+}
+
+.download-item-details {
+  display: grid;
+  gap: 8px;
+  padding: 10px 4px 4px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.download-item-note {
+  font-size: 0.9rem;
+  color: #6c7683;
+}
+
+.download-item-error {
+  font-size: 0.9rem;
+  color: #a23b23;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .download-result-name {
@@ -506,40 +627,33 @@ h1 {
   user-select: none;
 }
 
-.confirmed-tags-block {
-  margin-top: 1.2em;
-  padding: 1em 1.2em;
-  background: #f3f7fa;
-  border: 1px solid #b6c2d1;
-  border-radius: 10px;
+/* Live tag preview under each tags input */
+.tag-preview {
   display: grid;
-  gap: 0.5em;
-  max-width: 100%;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px dashed #c3c9d1;
+  border-radius: 10px;
+  background: #f7f9fb;
   min-width: 0;
+  max-width: 100%;
   overflow: hidden;
 }
 
-.confirmed-tags-groups {
-  display: grid;
-  gap: 10px;
-}
-
-.confirmed-tags-group {
-  display: grid;
-  gap: 6px;
-}
-
-.confirmed-tags-file {
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: #31465f;
-}
-
-.confirmed-tags-label {
-  font-size: 0.98em;
+.tag-preview-label {
+  font-size: 0.85rem;
   font-weight: 600;
-  color: #2a3a4d;
-  margin-bottom: 0.2em;
+  letter-spacing: 0.02em;
+  color: #5a6673;
+}
+
+.tag-preview .tag-chips-row {
+  margin-top: 0;
+}
+
+.tag-preview-chip {
+  background: #eef2f7;
+  font-size: 0.92em;
 }
 
 .download-filename,
@@ -586,8 +700,12 @@ h1 {
 }
 
 @media (max-width: 420px) {
-  .download-result-item {
+  .download-item-summary {
     grid-template-columns: 1fr;
+  }
+
+  .download-item-download {
+    width: 100%;
   }
 
   .individual-tag-actions {
@@ -595,7 +713,7 @@ h1 {
   }
 }
 
-/* Video thumbnail click-to-preview button */
+/* Media thumbnail click-to-preview button */
 .preview-frame-button {
   display: block;
   width: 100%;
@@ -616,13 +734,41 @@ h1 {
   position: relative;
 }
 
-.preview-play-icon {
+.preview-play-icon,
+.preview-zoom-icon {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   pointer-events: none;
+}
+
+.preview-zoom-icon {
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 8px;
+}
+
+.preview-zoom-circle {
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.42);
+  border-radius: 50%;
+  color: #fff;
+  font-size: 0.95rem;
+  backdrop-filter: blur(2px);
+  transition:
+    background 120ms ease,
+    transform 120ms ease;
+}
+
+.preview-frame-button:hover .preview-zoom-circle {
+  background: rgba(0, 0, 0, 0.65);
+  transform: scale(1.1);
 }
 
 .preview-play-circle {
@@ -647,8 +793,8 @@ h1 {
   transform: scale(1.1);
 }
 
-/* Video lightbox */
-.video-lightbox-backdrop {
+/* Media lightbox */
+.media-lightbox-backdrop {
   position: fixed;
   inset: 0;
   z-index: 50;
@@ -659,7 +805,7 @@ h1 {
   padding: 16px;
 }
 
-.video-lightbox {
+.media-lightbox {
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -673,7 +819,7 @@ h1 {
     0 0 0 1px rgba(255, 255, 255, 0.07);
 }
 
-.video-lightbox-header {
+.media-lightbox-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -684,7 +830,7 @@ h1 {
   min-width: 0;
 }
 
-.video-lightbox-filename {
+.media-lightbox-filename {
   font-size: 0.88rem;
   color: #b0b0b0;
   overflow: hidden;
@@ -694,7 +840,7 @@ h1 {
   flex: 1;
 }
 
-.video-lightbox-footer {
+.media-lightbox-footer {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -705,7 +851,7 @@ h1 {
   flex-shrink: 0;
 }
 
-.video-lightbox-zoom-btn {
+.media-lightbox-zoom-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -724,22 +870,22 @@ h1 {
     color 120ms ease;
 }
 
-.video-lightbox-zoom-btn:hover:not(:disabled) {
+.media-lightbox-zoom-btn:hover:not(:disabled) {
   background: #3c3c3c;
   color: #fff;
 }
 
-.video-lightbox-zoom-btn:disabled {
+.media-lightbox-zoom-btn:disabled {
   opacity: 0.35;
   cursor: default;
 }
 
-.video-lightbox-zoom-btn:focus-visible {
+.media-lightbox-zoom-btn:focus-visible {
   outline: 2px solid #5b7ea4;
   outline-offset: 2px;
 }
 
-.video-lightbox-zoom-level {
+.media-lightbox-zoom-level {
   min-width: 52px;
   padding: 10px 14px;
   border: 1px solid transparent;
@@ -757,24 +903,24 @@ h1 {
     border-color 120ms ease;
 }
 
-.video-lightbox-zoom-level:not(:disabled) {
+.media-lightbox-zoom-level:not(:disabled) {
   border-color: #444;
   background: #2d2d2d;
   color: #ccc;
   cursor: pointer;
 }
 
-.video-lightbox-zoom-level:not(:disabled):hover {
+.media-lightbox-zoom-level:not(:disabled):hover {
   background: #3c3c3c;
   color: #fff;
 }
 
-.video-lightbox-zoom-level:focus-visible {
+.media-lightbox-zoom-level:focus-visible {
   outline: 2px solid #5b7ea4;
   outline-offset: 2px;
 }
 
-.video-lightbox-close {
+.media-lightbox-close {
   flex-shrink: 0;
   min-height: 34px;
   padding: 5px 14px;
@@ -790,24 +936,24 @@ h1 {
     color 120ms ease;
 }
 
-.video-lightbox-close:hover {
+.media-lightbox-close:hover {
   background: #3c3c3c;
   color: #fff;
 }
 
-.video-lightbox-close:focus-visible {
+.media-lightbox-close:focus-visible {
   outline: 2px solid #5b7ea4;
   outline-offset: 2px;
 }
 
-.video-lightbox-video-wrapper {
+.media-lightbox-media-wrapper {
   overflow: auto;
   background: #000;
   flex: 1;
   min-height: 0;
 }
 
-.video-lightbox-video {
+.media-lightbox-media {
   display: block;
   width: 100%;
   background: #000;

@@ -1,5 +1,7 @@
 import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 
+import { normalizeTags } from "./normalizeTags";
+
 type GifTagStreamDoneEvent = {
   type: "done";
   contentType: string;
@@ -21,15 +23,22 @@ type ServerConfig = {
   version: string;
 };
 
-type ProcessedDownload = {
-  id: string;
-  downloadFilename: string;
-  sourceFilename: string;
-  blob: Blob;
-};
+type DownloadStatus =
+  | "queued"
+  | "converting"
+  | "tagging"
+  | "downloaded"
+  | "failed";
 
-type ConfirmedTagGroup = {
+type DownloadItem = {
+  blob: Blob | null;
+  conversionPercent: number | null;
+  downloadFilename: string | null;
+  errorMessage: string | null;
+  file: File;
+  id: string;
   sourceFilename: string;
+  status: DownloadStatus;
   tags: string[];
 };
 
@@ -43,6 +52,11 @@ type ProcessTagAssignmentsResult = {
   failures: Array<{ file: string; message: string }>;
 };
 
+type LightboxTarget = {
+  file: File;
+  kind: "image" | "video";
+};
+
 export default function App() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [tagMode, setTagMode] = useState<TagMode>("shared");
@@ -54,28 +68,32 @@ export default function App() {
     null,
   );
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
-  const [confirmedTagGroups, setConfirmedTagGroups] = useState<
-    ConfirmedTagGroup[]
-  >([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [processedDownloads, setProcessedDownloads] = useState<
-    ProcessedDownload[]
-  >([]);
+  const [downloadItems, setDownloadItems] = useState<DownloadItem[]>([]);
+  const [expandedDownloadIds, setExpandedDownloadIds] = useState<
+    ReadonlySet<string>
+  >(new Set());
   const [serverConfig, setServerConfig] = useState<ServerConfig | null>(null);
   const [serverConfigState, setServerConfigState] = useState<
     "loading" | "ready" | "unavailable"
   >("loading");
   const [warningMessages, setWarningMessages] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [lightboxFile, setLightboxFile] = useState<File | null>(null);
+  const [lightboxTarget, setLightboxTarget] = useState<LightboxTarget | null>(
+    null,
+  );
   const [convertGifsToMp4, setConvertGifsToMp4] = useState(true);
+  const [convertPngsToJpg, setConvertPngsToJpg] = useState(false);
   const [perFileConvertGif, setPerFileConvertGif] = useState<
     Record<string, boolean>
   >({});
-  const [encodingProgress, setEncodingProgress] = useState<
-    Record<string, number | null>
+  const [perFileConvertPng, setPerFileConvertPng] = useState<
+    Record<string, boolean>
   >({});
   const [detectedGifIds, setDetectedGifIds] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
+  const [detectedPngIds, setDetectedPngIds] = useState<ReadonlySet<string>>(
     new Set(),
   );
 
@@ -136,41 +154,47 @@ export default function App() {
 
   useEffect(() => {
     const candidates = selectedFiles.filter(
-      (file) => !isGifFile(file) && isImageFile(file),
+      (file) => isImageFile(file) && !(isGifFile(file) && isPngFile(file)),
     );
 
     if (candidates.length === 0) {
-      Promise.resolve().then(() => setDetectedGifIds(new Set()));
+      Promise.resolve().then(() => {
+        setDetectedGifIds(new Set());
+        setDetectedPngIds(new Set());
+      });
       return;
     }
 
     let cancelled = false;
 
-    async function detectDisguisedGifs() {
+    async function detectDisguisedImages() {
       const gifIds = new Set<string>();
+      const pngIds = new Set<string>();
 
       for (const file of candidates) {
-        if (await hasGifMagicBytes(file)) {
+        const signature = await readImageSignature(file);
+
+        if (signature === "gif" && !isGifFile(file)) {
           gifIds.add(buildFileId(file));
+        }
+
+        if (signature === "png" && !isPngFile(file)) {
+          pngIds.add(buildFileId(file));
         }
       }
 
       if (!cancelled) {
         setDetectedGifIds(gifIds);
+        setDetectedPngIds(pngIds);
       }
     }
 
-    void detectDisguisedGifs();
+    void detectDisguisedImages();
 
     return () => {
       cancelled = true;
     };
   }, [selectedFiles]);
-
-  const visibleConfirmedTagGroups = getVisibleConfirmedTagGroups(
-    tagMode,
-    confirmedTagGroups,
-  );
 
   function getTagAssignments(
     files: File[],
@@ -189,12 +213,50 @@ export default function App() {
     return isGifFile(file) || detectedGifIds.has(buildFileId(file));
   }
 
+  function isEffectivelyPng(file: File): boolean {
+    if (isEffectivelyGif(file)) {
+      return false;
+    }
+
+    return isPngFile(file) || detectedPngIds.has(buildFileId(file));
+  }
+
   function shouldConvertGif(file: File): boolean {
     if (!isEffectivelyGif(file)) return false;
     if (tagMode === "individual") {
       return perFileConvertGif[buildFileId(file)] ?? true;
     }
     return convertGifsToMp4;
+  }
+
+  function shouldConvertPng(file: File): boolean {
+    if (!isEffectivelyPng(file)) return false;
+    if (tagMode === "individual") {
+      return perFileConvertPng[buildFileId(file)] ?? false;
+    }
+    return convertPngsToJpg;
+  }
+
+  function updateDownloadItem(fileId: string, patch: Partial<DownloadItem>) {
+    setDownloadItems((previousItems) =>
+      previousItems.map((item) =>
+        item.id === fileId ? { ...item, ...patch } : item,
+      ),
+    );
+  }
+
+  function toggleDownloadDetails(fileId: string) {
+    setExpandedDownloadIds((previousIds) => {
+      const nextIds = new Set(previousIds);
+
+      if (nextIds.has(fileId)) {
+        nextIds.delete(fileId);
+      } else {
+        nextIds.add(fileId);
+      }
+
+      return nextIds;
+    });
   }
 
   function removeQueuedFile(fileToRemove: File, skipStatusUpdate = false) {
@@ -206,15 +268,21 @@ export default function App() {
       return next;
     });
 
+    setPerFileConvertPng((prev) => {
+      const next = { ...prev };
+      delete next[fileIdToRemove];
+      return next;
+    });
+
     setDetectedGifIds((prev) => {
       const next = new Set(prev);
       next.delete(fileIdToRemove);
       return next;
     });
 
-    setEncodingProgress((prev) => {
-      const next = { ...prev };
-      delete next[fileIdToRemove];
+    setDetectedPngIds((prev) => {
+      const next = new Set(prev);
+      next.delete(fileIdToRemove);
       return next;
     });
 
@@ -297,19 +365,38 @@ export default function App() {
     setErrorMessage(null);
 
     if (resetResults) {
-      setProcessedDownloads([]);
       setWarningMessages([]);
-      setConfirmedTagGroups([]);
     }
+
+    // The whole queue is listed up front so the download manager shows what is
+    // pending instead of appearing one row at a time.
+    const queuedItems: DownloadItem[] = tagAssignments.map(({ file }) => ({
+      blob: null,
+      conversionPercent: null,
+      downloadFilename: null,
+      errorMessage: null,
+      file,
+      id: buildFileId(file),
+      sourceFilename: file.name,
+      status: "queued",
+      tags: [],
+    }));
+
+    setDownloadItems((previousItems) =>
+      resetResults
+        ? queuedItems
+        : mergeDownloadItems(previousItems, queuedItems),
+    );
 
     const failures: Array<{ file: string; message: string }> = [];
     const downloadedFilenames: string[] = [];
     const responseWarnings = new Set<string>();
-    const nextConfirmedTagGroups: ConfirmedTagGroup[] = [];
 
     try {
       for (const [index, assignment] of tagAssignments.entries()) {
         const { file, value } = assignment;
+        const fileId = buildFileId(file);
+        const convertsGif = shouldConvertGif(file);
 
         setStatus(
           totalCountLabel === 1
@@ -317,11 +404,14 @@ export default function App() {
             : `Writing metadata for ${index + 1} of ${totalCountLabel} files...`,
         );
 
-        try {
-          if (shouldConvertGif(file)) {
-            const fileId = buildFileId(file);
-            setEncodingProgress((prev) => ({ ...prev, [fileId]: 0 }));
+        updateDownloadItem(fileId, {
+          conversionPercent: convertsGif ? 0 : null,
+          errorMessage: null,
+          status: convertsGif ? "converting" : "tagging",
+        });
 
+        try {
+          if (convertsGif) {
             const gifFormData = new FormData();
             gifFormData.append("convertGifToMp4", "true");
             gifFormData.append("fileSize", String(file.size));
@@ -386,10 +476,10 @@ export default function App() {
                     evt["type"] === "progress" &&
                     typeof evt["percent"] === "number"
                   ) {
-                    setEncodingProgress((prev) => ({
-                      ...prev,
-                      [fileId]: evt["percent"] as number,
-                    }));
+                    updateDownloadItem(fileId, {
+                      conversionPercent: evt["percent"] as number,
+                      status: "converting",
+                    });
                   } else if (
                     evt["type"] === "done" &&
                     typeof evt["filename"] === "string" &&
@@ -409,16 +499,16 @@ export default function App() {
               }
             } finally {
               reader.releaseLock();
-              setEncodingProgress((prev) => {
-                const next = { ...prev };
-                delete next[fileId];
-                return next;
-              });
             }
 
             if (!donePayload) {
               throw new Error("GIF conversion stream ended without a result.");
             }
+
+            updateDownloadItem(fileId, {
+              conversionPercent: null,
+              status: "tagging",
+            });
 
             const gifBytes = Uint8Array.from(atob(donePayload.data), (c) =>
               c.charCodeAt(0),
@@ -427,32 +517,18 @@ export default function App() {
               type: donePayload.contentType,
             });
             const gifDownloadFilename = donePayload.filename;
-            const gifCompletedDownload = {
-              id: `${file.name}-${gifDownloadFilename}`,
-              blob: gifBlob,
-              downloadFilename: gifDownloadFilename,
-              sourceFilename: file.name,
-            };
-
-            setProcessedDownloads((previousDownloads) => {
-              if (
-                previousDownloads.some((d) => d.id === gifCompletedDownload.id)
-              ) {
-                return previousDownloads;
-              }
-
-              return [...previousDownloads, gifCompletedDownload];
-            });
 
             triggerDownload(gifBlob, gifDownloadFilename);
             downloadedFilenames.push(gifDownloadFilename);
 
-            if (Array.isArray(donePayload.tags)) {
-              nextConfirmedTagGroups.push({
-                sourceFilename: file.name,
-                tags: donePayload.tags,
-              });
-            }
+            updateDownloadItem(fileId, {
+              blob: gifBlob,
+              downloadFilename: gifDownloadFilename,
+              status: "downloaded",
+              tags: Array.isArray(donePayload.tags)
+                ? donePayload.tags
+                : normalizeTags(value),
+            });
 
             if (donePayload.resolutionWarning) {
               responseWarnings.add(donePayload.resolutionWarning);
@@ -461,6 +537,11 @@ export default function App() {
             const formData = new FormData();
             formData.append("fileSize", String(file.size));
             formData.append("tags", value);
+
+            if (shouldConvertPng(file)) {
+              formData.append("convertPngToJpg", "true");
+            }
+
             formData.append("file", file);
 
             const response = await fetch("/api/media/tag", {
@@ -473,20 +554,9 @@ export default function App() {
               throw new Error(responseError);
             }
 
-            const confirmedTagsHeader = response.headers.get(
-              "x-media-tagger-confirmed-tags",
+            const confirmedTags = parseConfirmedTags(
+              response.headers.get("x-media-tagger-confirmed-tags"),
             );
-
-            if (confirmedTagsHeader) {
-              try {
-                nextConfirmedTagGroups.push({
-                  sourceFilename: file.name,
-                  tags: JSON.parse(confirmedTagsHeader) as string[],
-                });
-              } catch {
-                // ignore invalid header payloads
-              }
-            }
 
             const blob = await response.blob();
             const downloadFilename =
@@ -501,36 +571,31 @@ export default function App() {
               responseWarnings.add(resolutionWarning);
             }
 
-            const completedDownload = {
-              id: `${file.name}-${downloadFilename}`,
-              blob,
-              downloadFilename,
-              sourceFilename: file.name,
-            };
-
-            setProcessedDownloads((previousDownloads) => {
-              if (
-                previousDownloads.some(
-                  (previousDownload) =>
-                    previousDownload.id === completedDownload.id,
-                )
-              ) {
-                return previousDownloads;
-              }
-
-              return [...previousDownloads, completedDownload];
-            });
-
             triggerDownload(blob, downloadFilename);
             downloadedFilenames.push(downloadFilename);
+
+            updateDownloadItem(fileId, {
+              blob,
+              downloadFilename,
+              status: "downloaded",
+              tags: confirmedTags ?? normalizeTags(value),
+            });
           }
         } catch (error) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : "Upload failed unexpectedly.";
+
           failures.push({
             file: file.name,
-            message:
-              error instanceof Error
-                ? error.message
-                : "Upload failed unexpectedly.",
+            message,
+          });
+
+          updateDownloadItem(fileId, {
+            conversionPercent: null,
+            errorMessage: message,
+            status: "failed",
           });
         }
       }
@@ -544,14 +609,6 @@ export default function App() {
           resetResults
             ? Array.from(responseWarnings)
             : Array.from(new Set([...previousWarnings, ...responseWarnings])),
-        );
-      }
-
-      if (nextConfirmedTagGroups.length > 0) {
-        setConfirmedTagGroups((previousGroups) =>
-          resetResults
-            ? nextConfirmedTagGroups
-            : [...previousGroups, ...nextConfirmedTagGroups],
         );
       }
 
@@ -574,21 +631,29 @@ export default function App() {
     }
   }
 
-  function renderMediaPreview(
-    file: File,
-    options?: { allowVideoPreview?: boolean },
-  ) {
+  function renderMediaPreview(file: File) {
     const previewUrl = previewUrls[buildFileId(file)] ?? null;
     const videoDetected = isVideoFile(file);
-    const showVideoPreview =
-      (options?.allowVideoPreview ?? true) && videoDetected && previewUrl;
 
-    if (showVideoPreview) {
+    if (!previewUrl) {
+      return (
+        <div className="preview-frame">
+          <div
+            className="preview-placeholder"
+            aria-label={`No preview available for ${file.name}`}
+          >
+            <span>{formatPreviewLabel(file)}</span>
+          </div>
+        </div>
+      );
+    }
+
+    if (videoDetected) {
       return (
         <button
           aria-label={`Open video preview for ${file.name}`}
           className="preview-frame-button"
-          onClick={() => setLightboxFile(file)}
+          onClick={() => setLightboxTarget({ file, kind: "video" })}
           type="button"
         >
           <div className="preview-frame">
@@ -609,28 +674,33 @@ export default function App() {
     }
 
     return (
-      <div className="preview-frame">
-        {previewUrl ? (
+      <button
+        aria-label={`Open image preview for ${file.name}`}
+        className="preview-frame-button"
+        onClick={() => setLightboxTarget({ file, kind: "image" })}
+        type="button"
+      >
+        <div className="preview-frame">
           <img
             alt={`Preview of ${file.name}`}
             className="preview-image"
             src={previewUrl}
           />
-        ) : (
-          <div
-            className="preview-placeholder"
-            aria-label={`No preview available for ${file.name}`}
-          >
-            <span>{formatPreviewLabel(file)}</span>
+          <div aria-hidden="true" className="preview-zoom-icon">
+            <div className="preview-zoom-circle">&#9906;</div>
           </div>
-        )}
-      </div>
+        </div>
+      </button>
     );
   }
 
-  function handleManualDownload(download: ProcessedDownload) {
-    triggerDownload(download.blob, download.downloadFilename);
-    setStatus(`Manual download started for ${download.downloadFilename}.`);
+  function handleManualDownload(item: DownloadItem) {
+    if (!item.blob || !item.downloadFilename) {
+      return;
+    }
+
+    triggerDownload(item.blob, item.downloadFilename);
+    setStatus(`Manual download started for ${item.downloadFilename}.`);
   }
 
   function handleTagModeChange(nextMode: TagMode) {
@@ -726,7 +796,7 @@ export default function App() {
       setPerFileTags({});
       setCopiedTags(null);
       setCopiedFromFilename(null);
-      setProcessedDownloads([]);
+      setDownloadItems([]);
       setErrorMessage(`Choose no more than ${MAX_FILES} files at once.`);
       setStatus("Ready for upload.");
       return;
@@ -737,10 +807,11 @@ export default function App() {
       buildPerFileTagMap(files, previousTags, tags),
     );
     setPerFileConvertGif({});
+    setPerFileConvertPng({});
     setCopiedTags(null);
     setCopiedFromFilename(null);
-    setProcessedDownloads([]);
-    setConfirmedTagGroups([]);
+    setDownloadItems([]);
+    setExpandedDownloadIds(new Set());
 
     if (files.length > 0) {
       setStatus(
@@ -755,15 +826,17 @@ export default function App() {
     setStatus("Ready for upload.");
   }
 
-  const lightboxPreviewUrl =
-    lightboxFile ? (previewUrls[buildFileId(lightboxFile)] ?? null) : null;
+  const lightboxPreviewUrl = lightboxTarget
+    ? (previewUrls[buildFileId(lightboxTarget.file)] ?? null)
+    : null;
 
   return (
     <main className="app-shell">
-      {lightboxFile && lightboxPreviewUrl ? (
-        <VideoLightbox
-          file={lightboxFile}
-          onClose={() => setLightboxFile(null)}
+      {lightboxTarget && lightboxPreviewUrl ? (
+        <MediaLightbox
+          file={lightboxTarget.file}
+          kind={lightboxTarget.kind}
+          onClose={() => setLightboxTarget(null)}
           previewUrl={lightboxPreviewUrl}
         />
       ) : null}
@@ -855,6 +928,26 @@ export default function App() {
             </section>
           ) : null}
 
+          {selectedFiles.some(isEffectivelyPng) && tagMode === "shared" ? (
+            <section className="field-card" aria-label="PNG to JPG conversion">
+              <span className="field-label">PNG to JPG conversion</span>
+              <p className="field-help">
+                Convert PNG files to JPG for much smaller file sizes. JPG has no
+                alpha channel, so transparency is flattened onto a white
+                background.
+              </p>
+              <label className="convert-gif-toggle">
+                <input
+                  checked={convertPngsToJpg}
+                  disabled={isSubmitting}
+                  onChange={(e) => setConvertPngsToJpg(e.target.checked)}
+                  type="checkbox"
+                />
+                <span>Convert PNG files to JPG</span>
+              </label>
+            </section>
+          ) : null}
+
           {tagMode === "shared" ? (
             <section className="field-card" aria-label="Tags">
               <label className="field-label" htmlFor="media-tags">
@@ -871,11 +964,10 @@ export default function App() {
                 >
                   {selectedFiles.map((file) => {
                     const fileId = buildFileId(file);
-                    const progress = encodingProgress[fileId];
 
                     return (
                       <article className="shared-preview-item" key={fileId}>
-                        {renderMediaPreview(file, { allowVideoPreview: true })}
+                        {renderMediaPreview(file)}
                         <div className="shared-preview-copy">
                           <span
                             className="field-value individual-tag-filename"
@@ -883,19 +975,6 @@ export default function App() {
                           >
                             {file.name}
                           </span>
-                          {progress != null ? (
-                            <div className="encoding-progress-wrapper">
-                              <span className="encoding-progress-label">
-                                Converting to MP4&hellip; {progress}%
-                              </span>
-                              <progress
-                                aria-label={`Encoding progress for ${file.name}`}
-                                className="encoding-progress"
-                                max={100}
-                                value={progress}
-                              />
-                            </div>
-                          ) : null}
                           <button
                             aria-label={`Remove ${file.name}`}
                             className="secondary-button"
@@ -923,6 +1002,7 @@ export default function App() {
                 rows={4}
                 value={tags}
               />
+              <TagPreview label="Tag preview" value={tags} />
             </section>
           ) : (
             <section
@@ -968,19 +1048,21 @@ export default function App() {
                               <span>Convert to MP4</span>
                             </label>
                           ) : null}
-                          {encodingProgress[fileId] != null ? (
-                            <div className="encoding-progress-wrapper">
-                              <span className="encoding-progress-label">
-                                Converting to MP4&hellip;{" "}
-                                {encodingProgress[fileId]}%
-                              </span>
-                              <progress
-                                aria-label={`Encoding progress for ${file.name}`}
-                                className="encoding-progress"
-                                max={100}
-                                value={encodingProgress[fileId]!}
+                          {isEffectivelyPng(file) ? (
+                            <label className="convert-gif-toggle">
+                              <input
+                                checked={perFileConvertPng[fileId] ?? false}
+                                disabled={isSubmitting}
+                                onChange={(e) =>
+                                  setPerFileConvertPng((prev) => ({
+                                    ...prev,
+                                    [fileId]: e.target.checked,
+                                  }))
+                                }
+                                type="checkbox"
                               />
-                            </div>
+                              <span>Convert to JPG</span>
+                            </label>
                           ) : null}
                           <label
                             className="individual-tag-label"
@@ -1000,6 +1082,10 @@ export default function App() {
                             }
                             placeholder="forest, big|huge trees, large trees|, large |trees, sunrise"
                             rows={3}
+                            value={perFileTags[fileId] ?? ""}
+                          />
+                          <TagPreview
+                            label={`Tag preview for ${file.name}`}
                             value={perFileTags[fileId] ?? ""}
                           />
                           <div className="individual-tag-actions">
@@ -1069,79 +1155,28 @@ export default function App() {
           >
             {isSubmitting ? "Writing metadata..." : "Tag all and download"}
           </button>
-
-          {visibleConfirmedTagGroups.length > 0 ? (
-            <div className="confirmed-tags-block">
-              <div className="confirmed-tags-label">
-                Tags applied by the server:
-              </div>
-              <div className="confirmed-tags-groups">
-                {visibleConfirmedTagGroups.map((group) => (
-                  <section
-                    className="confirmed-tags-group"
-                    key={`${group.sourceFilename}-${group.tags.join("|")}`}
-                  >
-                    {tagMode === "individual" ? (
-                      <div className="confirmed-tags-file">
-                        {group.sourceFilename}
-                      </div>
-                    ) : null}
-                    <div
-                      className="tag-chips-row"
-                      aria-label={`Confirmed tags for ${group.sourceFilename}`}
-                    >
-                      {group.tags.map((tag) => (
-                        <span
-                          className="tag-chip"
-                          key={`${group.sourceFilename}-${tag}`}
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  </section>
-                ))}
-              </div>
-            </div>
-          ) : null}
         </form>
 
-        {processedDownloads.length > 0 ? (
-          <section className="download-results" aria-label="Processed files">
-            <div className="download-results-header">
-              <h2>Processed files</h2>
+        {downloadItems.length > 0 ? (
+          <section className="download-manager" aria-label="Downloads">
+            <div className="download-manager-header">
+              <h2>Downloads</h2>
               <p className="field-help">
-                Automatic download was attempted for each file. If your device
-                delayed or blocked one, use the download button next to that
-                file.
+                Every queued file is listed here. Automatic download is
+                attempted as soon as a file finishes; if your device delayed or
+                blocked one, use its download button.
               </p>
             </div>
 
-            <ul className="download-result-list">
-              {processedDownloads.map((download) => (
-                <li className="download-result-item" key={download.id}>
-                  <div className="download-result-copy">
-                    <span
-                      className="field-value download-filename"
-                      title={download.sourceFilename}
-                    >
-                      {download.sourceFilename}
-                    </span>
-                    <span
-                      className="download-result-name"
-                      title={download.downloadFilename}
-                    >
-                      Saves as {download.downloadFilename}
-                    </span>
-                  </div>
-                  <button
-                    className="secondary-button"
-                    onClick={() => handleManualDownload(download)}
-                    type="button"
-                  >
-                    Download
-                  </button>
-                </li>
+            <ul className="download-item-list">
+              {downloadItems.map((item) => (
+                <DownloadRow
+                  isExpanded={expandedDownloadIds.has(item.id)}
+                  item={item}
+                  key={item.id}
+                  onDownload={() => handleManualDownload(item)}
+                  onToggle={() => toggleDownloadDetails(item.id)}
+                />
               ))}
             </ul>
           </section>
@@ -1163,12 +1198,176 @@ export default function App() {
   );
 }
 
-function VideoLightbox({
+function TagPreview({ label, value }: { label: string; value: string }) {
+  const previewTags = normalizeTags(value);
+
+  return (
+    <div aria-label={label} aria-live="polite" className="tag-preview">
+      <span className="tag-preview-label">
+        {previewTags.length === 0
+          ? "No tags yet."
+          : `${previewTags.length} ${previewTags.length === 1 ? "tag" : "tags"}`}
+      </span>
+      {previewTags.length > 0 ? (
+        <div className="tag-chips-row">
+          {previewTags.map((tag) => (
+            <span className="tag-chip tag-preview-chip" key={tag}>
+              {tag}
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function DownloadRow({
+  isExpanded,
+  item,
+  onDownload,
+  onToggle,
+}: {
+  isExpanded: boolean;
+  item: DownloadItem;
+  onDownload: () => void;
+  onToggle: () => void;
+}) {
+  const thumbnailUrl = useObjectUrl(item.file);
+  const detailsId = `download-details-${buildElementId(item.id)}`;
+
+  return (
+    <li className={`download-item download-item-${item.status}`}>
+      <div className="download-item-summary">
+        <button
+          aria-controls={detailsId}
+          aria-expanded={isExpanded}
+          aria-label={`Toggle details for ${item.sourceFilename}`}
+          className="download-item-toggle"
+          onClick={onToggle}
+          type="button"
+        >
+          <span className="download-item-thumb">
+            {thumbnailUrl && isVideoFile(item.file) ? (
+              <video
+                aria-hidden="true"
+                className="download-item-thumb-media"
+                muted
+                playsInline
+                preload="metadata"
+                // The media fragment nudges the browser into painting a frame
+                // instead of an empty box for the thumbnail.
+                src={`${thumbnailUrl}#t=0.1`}
+              />
+            ) : thumbnailUrl ? (
+              <img
+                alt={`Thumbnail of ${item.sourceFilename}`}
+                className="download-item-thumb-media"
+                src={thumbnailUrl}
+              />
+            ) : (
+              <span className="download-item-thumb-placeholder">
+                {formatPreviewLabel(item.file)}
+              </span>
+            )}
+          </span>
+          <span className="download-item-copy">
+            <span className="download-filename" title={item.sourceFilename}>
+              {item.sourceFilename}
+            </span>
+            <span className="download-item-status">
+              {formatDownloadStatus(item)}
+            </span>
+          </span>
+          <span aria-hidden="true" className="download-item-chevron">
+            {isExpanded ? "▴" : "▾"}
+          </span>
+        </button>
+        <button
+          aria-label={`Download ${item.downloadFilename ?? item.sourceFilename}`}
+          className="secondary-button download-item-download"
+          disabled={!item.blob}
+          onClick={onDownload}
+          type="button"
+        >
+          Download
+        </button>
+      </div>
+
+      {item.conversionPercent != null ? (
+        <div className="encoding-progress-wrapper">
+          <progress
+            aria-label={`Encoding progress for ${item.sourceFilename}`}
+            className="encoding-progress"
+            max={100}
+            value={item.conversionPercent}
+          />
+        </div>
+      ) : null}
+
+      {isExpanded ? (
+        <div className="download-item-details" id={detailsId}>
+          {item.downloadFilename ? (
+            <span
+              className="download-result-name"
+              title={item.downloadFilename}
+            >
+              Saves as {item.downloadFilename}
+            </span>
+          ) : null}
+          {item.tags.length > 0 ? (
+            <div
+              aria-label={`Tags applied to ${item.sourceFilename}`}
+              className="tag-chips-row"
+            >
+              {item.tags.map((tag) => (
+                <span className="tag-chip" key={tag}>
+                  {tag}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <span className="download-item-note">
+              No tags confirmed by the server yet.
+            </span>
+          )}
+          {item.errorMessage ? (
+            <span className="download-item-error">{item.errorMessage}</span>
+          ) : null}
+        </div>
+      ) : null}
+    </li>
+  );
+}
+
+function useObjectUrl(file: File | null): string | null {
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!file || !isPreviewableFile(file)) {
+      // Schedule setState in a microtask to avoid ESLint error
+      Promise.resolve().then(() => setObjectUrl(null));
+      return;
+    }
+
+    const nextObjectUrl = URL.createObjectURL(file);
+    Promise.resolve().then(() => setObjectUrl(nextObjectUrl));
+
+    return () => {
+      URL.revokeObjectURL(nextObjectUrl);
+    };
+  }, [file]);
+
+  return objectUrl;
+}
+
+function MediaLightbox({
   file,
+  kind,
   previewUrl,
   onClose,
 }: {
   file: File;
+  kind: "image" | "video";
   previewUrl: string;
   onClose: () => void;
 }) {
@@ -1202,25 +1401,24 @@ function VideoLightbox({
     return () => el.removeEventListener("touchmove", handleTouchMove);
   }, []);
 
+  const zoomStyle = zoom !== 1 ? { width: `${zoom * 100}%` } : undefined;
+
   return (
     <div
-      aria-label={`Video preview for ${file.name}`}
+      aria-label={`${kind === "video" ? "Video" : "Image"} preview for ${file.name}`}
       aria-modal="true"
-      className="video-lightbox-backdrop"
+      className="media-lightbox-backdrop"
       onClick={onClose}
       role="dialog"
     >
-      <div
-        className="video-lightbox"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="video-lightbox-header">
-          <span className="video-lightbox-filename" title={file.name}>
+      <div className="media-lightbox" onClick={(e) => e.stopPropagation()}>
+        <div className="media-lightbox-header">
+          <span className="media-lightbox-filename" title={file.name}>
             {file.name}
           </span>
           <button
             autoFocus
-            className="video-lightbox-close"
+            className="media-lightbox-close"
             onClick={onClose}
             type="button"
           >
@@ -1228,7 +1426,7 @@ function VideoLightbox({
           </button>
         </div>
         <div
-          className="video-lightbox-video-wrapper"
+          className="media-lightbox-media-wrapper"
           onTouchEnd={() => {
             pinchStartDistRef.current = null;
           }}
@@ -1242,21 +1440,32 @@ function VideoLightbox({
           }}
           ref={wrapperRef}
         >
-          <video
-            autoPlay
-            className="video-lightbox-video"
-            controls
-            playsInline
-            src={previewUrl}
-            style={zoom !== 1 ? { width: `${zoom * 100}%` } : undefined}
-          />
+          {kind === "video" ? (
+            <video
+              autoPlay
+              className="media-lightbox-media"
+              controls
+              playsInline
+              src={previewUrl}
+              style={zoomStyle}
+            />
+          ) : (
+            <img
+              alt={`Full preview of ${file.name}`}
+              className="media-lightbox-media"
+              src={previewUrl}
+              style={zoomStyle}
+            />
+          )}
         </div>
-        <div className="video-lightbox-footer">
+        <div className="media-lightbox-footer">
           <button
             aria-label="Zoom out"
-            className="video-lightbox-zoom-btn"
+            className="media-lightbox-zoom-btn"
             disabled={zoom <= 1}
-            onClick={() => setZoom((z) => Math.max(Math.round((z - 0.5) * 10) / 10, 1))}
+            onClick={() =>
+              setZoom((z) => Math.max(Math.round((z - 0.5) * 10) / 10, 1))
+            }
             type="button"
           >
             −
@@ -1264,7 +1473,7 @@ function VideoLightbox({
           <button
             aria-label="Reset zoom"
             aria-live="polite"
-            className="video-lightbox-zoom-level"
+            className="media-lightbox-zoom-level"
             disabled={zoom === 1}
             onClick={() => setZoom(1)}
             type="button"
@@ -1273,9 +1482,11 @@ function VideoLightbox({
           </button>
           <button
             aria-label="Zoom in"
-            className="video-lightbox-zoom-btn"
+            className="media-lightbox-zoom-btn"
             disabled={zoom >= 4}
-            onClick={() => setZoom((z) => Math.min(Math.round((z + 0.5) * 10) / 10, 4))}
+            onClick={() =>
+              setZoom((z) => Math.min(Math.round((z + 0.5) * 10) / 10, 4))
+            }
             type="button"
           >
             +
@@ -1296,6 +1507,19 @@ async function readErrorMessage(response: Response): Promise<string> {
 
   const message = await response.text();
   return message || "Upload failed.";
+}
+
+function parseConfirmedTags(header: string | null): string[] | null {
+  if (!header) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(header) as unknown;
+    return Array.isArray(parsed) ? (parsed as string[]) : null;
+  } catch {
+    return null;
+  }
 }
 
 function getFilenameFromContentDisposition(
@@ -1322,6 +1546,39 @@ function triggerDownload(blob: Blob, filename: string) {
   anchor.remove();
 
   URL.revokeObjectURL(objectUrl);
+}
+
+function mergeDownloadItems(
+  previousItems: DownloadItem[],
+  queuedItems: DownloadItem[],
+): DownloadItem[] {
+  const queuedById = new Map(queuedItems.map((item) => [item.id, item]));
+  const merged = previousItems.map(
+    (item) => queuedById.get(item.id) ?? item,
+  );
+  const existingIds = new Set(previousItems.map((item) => item.id));
+
+  return [
+    ...merged,
+    ...queuedItems.filter((item) => !existingIds.has(item.id)),
+  ];
+}
+
+function formatDownloadStatus(item: DownloadItem): string {
+  switch (item.status) {
+    case "queued":
+      return "Queued";
+    case "converting":
+      return item.conversionPercent === null
+        ? "Converting to MP4..."
+        : `Converting to MP4... ${item.conversionPercent}%`;
+    case "tagging":
+      return "Writing metadata...";
+    case "downloaded":
+      return "Downloaded";
+    case "failed":
+      return "Failed";
+  }
 }
 
 function formatSelectedFileSummary(files: File[]): string {
@@ -1403,18 +1660,48 @@ function buildFileId(file: File): string {
   return `${file.name}-${file.size}-${file.lastModified}`;
 }
 
+function buildElementId(value: string): string {
+  return value.replace(/[^a-zA-Z0-9_-]/g, "-");
+}
+
 function isGifFile(file: File): boolean {
   return file.type === "image/gif" || file.name.toLowerCase().endsWith(".gif");
 }
 
-async function hasGifMagicBytes(file: File): Promise<boolean> {
+function isPngFile(file: File): boolean {
+  return file.type === "image/png" || file.name.toLowerCase().endsWith(".png");
+}
+
+/**
+ * Reads the leading magic bytes of an image file so that files carrying the
+ * wrong extension (a `.jpg` that is really a GIF or PNG) still get the right
+ * conversion option.
+ */
+async function readImageSignature(
+  file: File,
+): Promise<"gif" | "png" | "unknown"> {
   try {
-    const buffer = await file.slice(0, 6).arrayBuffer();
+    const buffer = await file.slice(0, 8).arrayBuffer();
     const bytes = new Uint8Array(buffer);
-    // GIF87a = 47 49 46 38 37 61, GIF89a = 47 49 46 38 39 61
-    return bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46;
+
+    // GIF87a / GIF89a
+    if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) {
+      return "gif";
+    }
+
+    // \x89PNG\r\n\x1a\n
+    if (
+      bytes[0] === 0x89 &&
+      bytes[1] === 0x50 &&
+      bytes[2] === 0x4e &&
+      bytes[3] === 0x47
+    ) {
+      return "png";
+    }
+
+    return "unknown";
   } catch {
-    return false;
+    return "unknown";
   }
 }
 
@@ -1449,24 +1736,4 @@ function buildPerFileTagMap(
 function formatPreviewLabel(file: File): string {
   const extension = file.name.split(".").pop()?.toUpperCase();
   return extension ?? "MEDIA";
-}
-
-function getVisibleConfirmedTagGroups(
-  tagMode: TagMode,
-  confirmedTagGroups: ConfirmedTagGroup[],
-): ConfirmedTagGroup[] {
-  if (confirmedTagGroups.length === 0) {
-    return confirmedTagGroups;
-  }
-
-  if (tagMode === "shared") {
-    return [
-      {
-        sourceFilename: "All files",
-        tags: confirmedTagGroups[0]?.tags ?? [],
-      },
-    ];
-  }
-
-  return confirmedTagGroups;
 }
