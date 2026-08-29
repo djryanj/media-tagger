@@ -15,6 +15,7 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ### Changed
 
+- chore(deps): bump renovatebot/github-action from 46.1.21 to 46.2.4 ([#107](https://github.com/djryanj/media-tagger/pull/107))
 - chore(deps-dev): bump vite from 8.1.4 to 8.2.2 ([#108](https://github.com/djryanj/media-tagger/pull/108))
 - chore(deps-dev): bump jsdom from 29.1.1 to 30.0.1 ([#109](https://github.com/djryanj/media-tagger/pull/109))
 - chore(deps-dev): bump eslint from 10.6.0 to 10.9.1 ([#110](https://github.com/djryanj/media-tagger/pull/110))
