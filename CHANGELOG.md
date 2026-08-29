@@ -15,6 +15,7 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ### Changed
 
+- chore(deps-dev): bump eslint from 10.6.0 to 10.9.1 ([#110](https://github.com/djryanj/media-tagger/pull/110))
 - chore(deps): bump @fastify/static from 9.3.0 to 10.1.3 ([#111](https://github.com/djryanj/media-tagger/pull/111))
 - chore(deps): bump dorny/paths-filter from 4.0.2 to 4.0.3 ([#112](https://github.com/djryanj/media-tagger/pull/112))
 - chore(deps): bump docker/setup-buildx-action from 4.2.0 to 4.3.0 ([#113](https://github.com/djryanj/media-tagger/pull/113))
