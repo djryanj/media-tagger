@@ -31,6 +31,8 @@ Human and AI contributors should optimize for a clean, reliable core workflow ra
 - The pnpm workspace contains `apps/web` and `apps/api`.
 - A root Makefile exists for install, development, and verification workflows.
 - The API and web app implement upload, tag normalization, metadata writing, and browser download.
+- Downloads are tracked in a download manager listing every queued file with its status, thumbnail, confirmed tags, and a per-row download button.
+- Optional server-side conversions run before the metadata write: GIF to MP4 (default on, progress streamed over SSE) and PNG to JPG (default off, lossy and alpha-flattening).
 - GitHub Actions CI validates lint, typecheck, test, build, Playwright coverage, and Docker build flows.
 - The runtime Dockerfile, Compose example, and Kubernetes manifests support the single-container deployment path.
 - The release process is driven by `make prepare-release`, `make tag-release`, and the tag-triggered GitHub release workflow.

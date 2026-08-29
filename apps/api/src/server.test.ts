@@ -347,6 +347,239 @@ describe("POST /api/media/tag-stream", () => {
   });
 });
 
+describe("POST /api/media/tag with convertPngToJpg", () => {
+  afterEach(() => {
+    execFileMock.mockReset();
+    execFileAsyncMock.mockReset();
+    spawnMock.mockReset();
+  });
+
+  it("converts a PNG to JPG before writing metadata", async () => {
+    const app = buildServer();
+    const boundary = "test-boundary";
+
+    const pngBytes = Buffer.from("\x89PNG\r\n\x1a\n fake png content");
+    const payload = "tags:cats,dogs";
+
+    // exiftool: detectMediaType → png (actual type check before converting)
+    queueExecFileSuccess("png\nimage/png\n");
+
+    // ffmpeg spawn: write a fake JPEG to the requested output path
+    spawnMock.mockImplementationOnce((_cmd: string, args: string[]) => {
+      const outputPath = args[args.length - 1] as string;
+      return buildFakeProcessWithOutput(outputPath);
+    });
+
+    // exiftool: writeTaggedMedia detectMediaType → jpg
+    queueExecFileSuccess("jpg\nimage/jpeg\n");
+    // exiftool: write metadata
+    queueExecFileSuccess("1 image files updated\n");
+    // exiftool: readback
+    queueExecFileSuccess(`${payload}\n`);
+
+    const body = buildMultipartBody(
+      {
+        convertPngToJpg: "true",
+        tags: "cats,dogs",
+        fileSize: String(pngBytes.length),
+      },
+      {
+        name: "file",
+        filename: "photo.png",
+        contentType: "image/png",
+        content: pngBytes,
+      },
+      boundary,
+    );
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/media/tag",
+      headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+      body,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(spawnMock).toHaveBeenCalledTimes(1);
+    expect(spawnMock.mock.calls[0]?.[0]).toBe("ffmpeg");
+    expect(response.headers["content-disposition"]).toContain("photo.jpg");
+    expect(response.headers["content-type"]).toContain("image/jpeg");
+    expect(response.headers["x-media-tagger-confirmed-tags"]).toBe(
+      JSON.stringify(["cats", "dogs"]),
+    );
+  });
+
+  it("keeps the PNG format when conversion is not requested", async () => {
+    const app = buildServer();
+    const boundary = "test-boundary";
+
+    const pngBytes = Buffer.from("\x89PNG\r\n\x1a\n fake png content");
+    const payload = "tags:cats";
+
+    // exiftool: writeTaggedMedia detectMediaType → png
+    queueExecFileSuccess("png\nimage/png\n");
+    // exiftool: write metadata
+    queueExecFileSuccess("1 image files updated\n");
+    // exiftool: readback
+    queueExecFileSuccess(`${payload}\n`);
+
+    const body = buildMultipartBody(
+      { tags: "cats", fileSize: String(pngBytes.length) },
+      {
+        name: "file",
+        filename: "photo.png",
+        contentType: "image/png",
+        content: pngBytes,
+      },
+      boundary,
+    );
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/media/tag",
+      headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+      body,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(spawnMock).not.toHaveBeenCalled();
+    expect(response.headers["content-disposition"]).toContain("photo.png");
+    expect(response.headers["content-type"]).toContain("image/png");
+  });
+
+  it("tags a real JPG without conversion when convertPngToJpg is true", async () => {
+    const app = buildServer();
+    const boundary = "test-boundary";
+
+    const jpgBytes = Buffer.from("\xff\xd8\xff fake jpeg content");
+    const payload = "tags:cats";
+
+    // exiftool: detectMediaType → jpg (not a PNG, so no conversion)
+    queueExecFileSuccess("jpg\nimage/jpeg\n");
+    // exiftool: writeTaggedMedia detectMediaType
+    queueExecFileSuccess("jpg\nimage/jpeg\n");
+    // exiftool: write metadata
+    queueExecFileSuccess("1 image files updated\n");
+    // exiftool: readback
+    queueExecFileSuccess(`${payload}\n`);
+
+    const body = buildMultipartBody(
+      {
+        convertPngToJpg: "true",
+        tags: "cats",
+        fileSize: String(jpgBytes.length),
+      },
+      {
+        name: "file",
+        filename: "photo.jpg",
+        contentType: "image/jpeg",
+        content: jpgBytes,
+      },
+      boundary,
+    );
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/media/tag",
+      headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+      body,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(spawnMock).not.toHaveBeenCalled();
+    expect(response.headers["content-disposition"]).toContain("photo.jpg");
+    expect(response.headers["content-type"]).toContain("image/jpeg");
+  });
+
+  it("converts a PNG that is disguised with a .jpg extension", async () => {
+    const app = buildServer();
+    const boundary = "test-boundary";
+
+    const pngBytes = Buffer.from("\x89PNG\r\n\x1a\n fake png content");
+    const payload = "tags:cats";
+
+    // exiftool: detectMediaType → png (detected from bytes, not the filename)
+    queueExecFileSuccess("png\nimage/png\n");
+
+    spawnMock.mockImplementationOnce((_cmd: string, args: string[]) => {
+      const outputPath = args[args.length - 1] as string;
+      return buildFakeProcessWithOutput(outputPath);
+    });
+
+    queueExecFileSuccess("jpg\nimage/jpeg\n");
+    queueExecFileSuccess("1 image files updated\n");
+    queueExecFileSuccess(`${payload}\n`);
+
+    const body = buildMultipartBody(
+      {
+        convertPngToJpg: "true",
+        tags: "cats",
+        fileSize: String(pngBytes.length),
+      },
+      {
+        name: "file",
+        filename: "disguised.jpg",
+        contentType: "image/jpeg",
+        content: pngBytes,
+      },
+      boundary,
+    );
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/media/tag",
+      headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+      body,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(spawnMock).toHaveBeenCalledTimes(1);
+    expect(response.headers["content-disposition"]).toContain("disguised.jpg");
+    expect(response.headers["content-type"]).toContain("image/jpeg");
+  });
+
+  it("returns a 422 when the PNG conversion fails", async () => {
+    const app = buildServer();
+    const boundary = "test-boundary";
+
+    const pngBytes = Buffer.from("\x89PNG\r\n\x1a\n fake png content");
+
+    // exiftool: detectMediaType → png
+    queueExecFileSuccess("png\nimage/png\n");
+    // ffmpeg spawn: fail
+    spawnMock.mockImplementationOnce(() =>
+      buildFakeProcess(1, "Invalid PNG data"),
+    );
+
+    const body = buildMultipartBody(
+      {
+        convertPngToJpg: "true",
+        tags: "cats",
+        fileSize: String(pngBytes.length),
+      },
+      {
+        name: "file",
+        filename: "broken.png",
+        contentType: "image/png",
+        content: pngBytes,
+      },
+      boundary,
+    );
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/media/tag",
+      headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+      body,
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect((response.json() as { error: string }).error).toContain(
+      "PNG-to-JPG conversion failed",
+    );
+  });
+});
+
 function queueExecFileSuccess(stdout: string, stderr = ""): void {
   execFileAsyncMock.mockResolvedValueOnce({ stderr, stdout });
 }
@@ -380,6 +613,10 @@ function buildFakeProcess(exitCode: number, stderrOutput = ""): FakeProcess {
   });
 
   return proc;
+}
+
+function buildFakeProcessWithOutput(outputPath: string): FakeProcess {
+  return buildFakeProcessWithProgressAndOutput([], outputPath);
 }
 
 function buildFakeProcessWithProgressAndOutput(

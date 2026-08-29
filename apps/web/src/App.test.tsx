@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
@@ -46,11 +46,14 @@ function expectOverflowContained(element: HTMLElement) {
     "shared-preview-copy",
     "individual-tag-filename",
     "file-name",
-    "download-result-copy",
+    "download-item",
+    "download-item-copy",
+    "download-item-details",
+    "download-item-summary",
     "download-filename",
     "download-result-name",
+    "tag-preview",
     "status-strip",
-    "confirmed-tags-block",
     "individual-tag-actions",
     "file-picker-row",
   ].some((cls) => element.classList.contains(cls));
@@ -284,10 +287,13 @@ describe("App", () => {
     expect((secondFormData.get("file") as File).name).toBe("sample-2.png");
     expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledTimes(2);
     expect(screen.getByText("Downloaded 2 of 2 files.")).toBeVisible();
-    expect(screen.getByText("Processed files")).toBeVisible();
-    expect(screen.getByText("Saves as tagged-sample-1.png")).toBeVisible();
-    expect(screen.getByText("Saves as tagged-sample-2.png")).toBeVisible();
-    expect(screen.getAllByRole("button", { name: "Download" })).toHaveLength(2);
+    expect(screen.getByText("Downloads")).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Download tagged-sample-1.png" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Download tagged-sample-2.png" }),
+    ).toBeVisible();
     expect(
       screen.getByText(
         "sample-1.png: the reported MIME type image/jpeg did not match detected image/png. Tagged the detected media type without transcoding.",
@@ -295,7 +301,7 @@ describe("App", () => {
     ).toBeVisible();
   });
 
-  it("allows manual re-download of processed files", async () => {
+  it("allows manual re-download from a download manager row", async () => {
     const user = userEvent.setup();
     const fetchMock = vi.mocked(fetch);
     const uploadedFile = new File(["png-data-1"], "sample-1.png", {
@@ -331,7 +337,9 @@ describe("App", () => {
     await waitFor(() => expect(getUploadCalls(fetchMock)).toHaveLength(1));
     expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledTimes(1);
 
-    await user.click(screen.getByRole("button", { name: "Download" }));
+    await user.click(
+      screen.getByRole("button", { name: "Download tagged-sample-1.png" }),
+    );
 
     expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledTimes(2);
     expect(
@@ -855,7 +863,7 @@ describe("App", () => {
     expect(getUploadCalls(fetchMock)).toHaveLength(0);
   });
 
-  it("shows tag chips only after upload with confirmed tags", async () => {
+  it("shows server-confirmed tag chips in the download row after upload", async () => {
     const user = userEvent.setup();
     const fetchMock = vi.mocked(fetch);
     const uploadedFile = new File(["png-data-1"], "sample-1.png", {
@@ -882,13 +890,27 @@ describe("App", () => {
       screen.getByRole("textbox", { name: /tags/i }),
       "big|huge trees",
     );
-    expect(screen.queryByText("big trees")).toBeNull();
-    expect(screen.queryByText("huge trees")).toBeNull();
+
+    // Before submitting there is no download row for the file.
+    expect(screen.queryByRole("region", { name: "Downloads" })).toBeNull();
+
     await user.click(
       screen.getByRole("button", { name: "Tag all and download" }),
     );
-    await waitFor(() => expect(screen.getByText("big trees")).toBeVisible());
-    expect(screen.getByText("huge trees")).toBeVisible();
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Download tagged-sample-1.png" }),
+      ).toBeVisible(),
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Toggle details for sample-1.png" }),
+    );
+
+    const appliedTags = screen.getByLabelText("Tags applied to sample-1.png");
+    expect(within(appliedTags).getByText("big trees")).toBeVisible();
+    expect(within(appliedTags).getByText("huge trees")).toBeVisible();
   });
 
   it("renders image previews responsively and never overflows the container", async () => {
@@ -1116,23 +1138,29 @@ describe("App", () => {
 
       await waitFor(() => expect(getUploadCalls(fetchMock)).toHaveLength(1));
 
-      // The download filename element must be overflow-contained.
-      const savesAsEl = screen.getByText(`Saves as ${longDownloadFilename}`);
-      expect(savesAsEl).toBeVisible();
-      expect(savesAsEl.classList.contains("download-result-name")).toBe(true);
-      expectOverflowContained(savesAsEl);
-
-      // The source filename in the results must also be contained.
+      // The source filename in the download row must be overflow-contained.
       const sourceEl = screen
         .getAllByText(LONG_FILENAME)
         .find((el: HTMLElement) => el.classList.contains("download-filename"));
       expect(sourceEl).toBeTruthy();
       expectOverflowContained(sourceEl!);
 
-      // The download-result-copy wrapper must constrain its children.
-      const resultCopy = sourceEl!.parentElement;
-      expect(resultCopy?.classList.contains("download-result-copy")).toBe(true);
-      expectOverflowContained(resultCopy!);
+      // The download-item-copy wrapper must constrain its children.
+      const itemCopy = sourceEl!.parentElement;
+      expect(itemCopy?.classList.contains("download-item-copy")).toBe(true);
+      expectOverflowContained(itemCopy!);
+
+      // Expanding the row reveals the download filename, also contained.
+      await user.click(
+        screen.getByRole("button", {
+          name: `Toggle details for ${LONG_FILENAME}`,
+        }),
+      );
+
+      const savesAsEl = screen.getByText(`Saves as ${longDownloadFilename}`);
+      expect(savesAsEl).toBeVisible();
+      expect(savesAsEl.classList.contains("download-result-name")).toBe(true);
+      expectOverflowContained(savesAsEl);
     });
 
     it("contains overflow on the status strip when warnings include long filenames", async () => {
@@ -1620,6 +1648,845 @@ describe("App", () => {
       await waitFor(() =>
         expect(screen.getByText("Downloaded photo.mp4.")).toBeVisible(),
       );
+    });
+  });
+
+  // ─── Download manager tests ──────────────────────────────────────────
+
+  describe("download manager", () => {
+    function buildTaggedResponse(
+      downloadFilename: string,
+      confirmedTags?: string[],
+    ) {
+      const headers: Record<string, string> = {
+        "content-disposition": `attachment; filename="${downloadFilename}"`,
+        "content-type": "image/png",
+      };
+
+      if (confirmedTags) {
+        headers["x-media-tagger-confirmed-tags"] = JSON.stringify(confirmedTags);
+      }
+
+      return new Response(new Blob(["tagged-media"]), { status: 200, headers });
+    }
+
+    function buildStreamingSseResponse() {
+      let streamController: ReadableStreamDefaultController<Uint8Array>;
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          streamController = controller;
+        },
+      });
+
+      return {
+        close() {
+          streamController.close();
+        },
+        push(event: Record<string, unknown>) {
+          streamController.enqueue(
+            encoder.encode(`data: ${JSON.stringify(event)}\n\n`),
+          );
+        },
+        response: new Response(stream, {
+          status: 200,
+          headers: { "content-type": "text/event-stream" },
+        }),
+      };
+    }
+
+    function getDownloadRow(sourceFilename: string): HTMLElement {
+      const filenameEl = screen
+        .getAllByText(sourceFilename)
+        .find((el: HTMLElement) => el.classList.contains("download-filename"));
+
+      expect(filenameEl).toBeTruthy();
+
+      const row = filenameEl!.closest("li");
+      expect(row).toBeTruthy();
+
+      return row as HTMLElement;
+    }
+
+    it("lists every selected file as soon as tagging starts", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const uploadedFiles = [
+        new File(["png-data-1"], "sample-1.png", { type: "image/png" }),
+        new File(["png-data-2"], "sample-2.png", { type: "image/png" }),
+      ];
+
+      let resolveFirstUpload!: (response: Response) => void;
+      const pendingFirstUpload = new Promise<Response>((resolve) => {
+        resolveFirstUpload = resolve;
+      });
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+      fetchMock.mockReturnValueOnce(pendingFirstUpload);
+      fetchMock.mockResolvedValueOnce(
+        buildTaggedResponse("tagged-sample-2.png"),
+      );
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        uploadedFiles,
+      );
+      await user.type(
+        screen.getByRole("textbox", { name: /tags/i }),
+        "forest",
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Tag all and download" }),
+      );
+
+      // Both rows must be present before the first upload has resolved.
+      const downloads = await screen.findByRole("region", { name: "Downloads" });
+      expect(within(downloads).getByText("sample-1.png")).toBeVisible();
+      expect(within(downloads).getByText("sample-2.png")).toBeVisible();
+      expect(getDownloadRow("sample-1.png")).toHaveClass("download-item-tagging");
+      expect(getDownloadRow("sample-2.png")).toHaveClass("download-item-queued");
+      expect(within(downloads).getByText("Queued")).toBeVisible();
+
+      resolveFirstUpload(buildTaggedResponse("tagged-sample-1.png"));
+
+      await waitFor(() =>
+        expect(screen.getByText("Downloaded 2 of 2 files.")).toBeVisible(),
+      );
+    });
+
+    it("marks a successfully downloaded row as downloaded", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const uploadedFile = new File(["png-data"], "sample-1.png", {
+        type: "image/png",
+      });
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+      fetchMock.mockResolvedValueOnce(
+        buildTaggedResponse("tagged-sample-1.png"),
+      );
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        uploadedFile,
+      );
+      await user.type(screen.getByRole("textbox", { name: /tags/i }), "forest");
+      await user.click(
+        screen.getByRole("button", { name: "Tag all and download" }),
+      );
+
+      await waitFor(() =>
+        expect(getDownloadRow("sample-1.png")).toHaveClass(
+          "download-item-downloaded",
+        ),
+      );
+      expect(screen.getByText("Downloaded")).toBeVisible();
+    });
+
+    it("marks a failed row as failed and shows the reason in its details", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const uploadedFile = new File(["png-data"], "sample-1.png", {
+        type: "image/png",
+      });
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+      fetchMock.mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "Metadata write failed." }), {
+          status: 422,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        uploadedFile,
+      );
+      await user.type(screen.getByRole("textbox", { name: /tags/i }), "forest");
+      await user.click(
+        screen.getByRole("button", { name: "Tag all and download" }),
+      );
+
+      await waitFor(() =>
+        expect(getDownloadRow("sample-1.png")).toHaveClass(
+          "download-item-failed",
+        ),
+      );
+
+      await user.click(
+        screen.getByRole("button", { name: "Toggle details for sample-1.png" }),
+      );
+
+      expect(
+        within(getDownloadRow("sample-1.png")).getByText(
+          "Metadata write failed.",
+        ),
+      ).toBeVisible();
+    });
+
+    it("collapses row details until the row is toggled open", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const uploadedFile = new File(["png-data"], "sample-1.png", {
+        type: "image/png",
+      });
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+      fetchMock.mockResolvedValueOnce(
+        buildTaggedResponse("tagged-sample-1.png", ["forest"]),
+      );
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        uploadedFile,
+      );
+      await user.type(screen.getByRole("textbox", { name: /tags/i }), "forest");
+      await user.click(
+        screen.getByRole("button", { name: "Tag all and download" }),
+      );
+
+      const toggle = await screen.findByRole("button", {
+        name: "Toggle details for sample-1.png",
+      });
+
+      expect(toggle).toHaveAttribute("aria-expanded", "false");
+      expect(screen.queryByText("Saves as tagged-sample-1.png")).toBeNull();
+
+      await user.click(toggle);
+
+      expect(toggle).toHaveAttribute("aria-expanded", "true");
+      expect(screen.getByText("Saves as tagged-sample-1.png")).toBeVisible();
+
+      await user.click(toggle);
+
+      expect(toggle).toHaveAttribute("aria-expanded", "false");
+      expect(screen.queryByText("Saves as tagged-sample-1.png")).toBeNull();
+    });
+
+    it("shows a thumbnail preview for each queued download", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const uploadedFile = new File(["png-data"], "sample-1.png", {
+        type: "image/png",
+      });
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+      fetchMock.mockResolvedValueOnce(
+        buildTaggedResponse("tagged-sample-1.png"),
+      );
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        uploadedFile,
+      );
+      await user.type(screen.getByRole("textbox", { name: /tags/i }), "forest");
+      await user.click(
+        screen.getByRole("button", { name: "Tag all and download" }),
+      );
+
+      const downloads = await screen.findByRole("region", { name: "Downloads" });
+
+      await waitFor(() =>
+        expect(
+          within(downloads).getByRole("img", {
+            name: "Thumbnail of sample-1.png",
+          }),
+        ).toBeVisible(),
+      );
+    });
+
+    it("shows the video conversion status inside the download row", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const gifFile = new File(["GIF89a"], "animation.gif", {
+        type: "image/gif",
+      });
+      const sseStream = buildStreamingSseResponse();
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+      fetchMock.mockResolvedValueOnce(sseStream.response);
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        gifFile,
+      );
+      await user.type(screen.getByRole("textbox", { name: /tags/i }), "cats");
+      await user.click(
+        screen.getByRole("button", { name: "Tag all and download" }),
+      );
+
+      const downloads = await screen.findByRole("region", { name: "Downloads" });
+
+      sseStream.push({ type: "progress", percent: 42 });
+
+      await waitFor(() =>
+        expect(
+          within(downloads).getByText("Converting to MP4... 42%"),
+        ).toBeVisible(),
+      );
+      expect(getDownloadRow("animation.gif")).toHaveClass(
+        "download-item-converting",
+      );
+      expect(
+        within(downloads).getByLabelText("Encoding progress for animation.gif"),
+      ).toBeVisible();
+
+      sseStream.push({
+        type: "done",
+        filename: "animation.mp4",
+        contentType: "video/mp4",
+        data: btoa("fake mp4"),
+        tags: ["cats"],
+        resolutionWarning: null,
+      });
+      sseStream.close();
+
+      await waitFor(() =>
+        expect(getDownloadRow("animation.gif")).toHaveClass(
+          "download-item-downloaded",
+        ),
+      );
+    });
+
+    it("keeps rows from earlier individual submissions", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const uploadedFiles = [
+        new File(["png-data-1"], "sample-1.png", { type: "image/png" }),
+        new File(["png-data-2"], "sample-2.png", { type: "image/png" }),
+      ];
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+      fetchMock.mockResolvedValueOnce(
+        buildTaggedResponse("tagged-sample-1.png"),
+      );
+      fetchMock.mockResolvedValueOnce(
+        buildTaggedResponse("tagged-sample-2.png"),
+      );
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        uploadedFiles,
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Tag images individually" }),
+      );
+      await user.type(
+        screen.getByRole("textbox", { name: "Tags for sample-1.png" }),
+        "forest",
+      );
+      await user.type(
+        screen.getByRole("textbox", { name: "Tags for sample-2.png" }),
+        "desert",
+      );
+
+      await user.click(
+        screen.getByRole("button", { name: "Tag and download sample-1.png" }),
+      );
+
+      await waitFor(() =>
+        expect(getDownloadRow("sample-1.png")).toHaveClass(
+          "download-item-downloaded",
+        ),
+      );
+
+      await user.click(
+        screen.getByRole("button", { name: "Tag and download sample-2.png" }),
+      );
+
+      await waitFor(() =>
+        expect(getDownloadRow("sample-2.png")).toHaveClass(
+          "download-item-downloaded",
+        ),
+      );
+
+      // The first row is still listed even though its file left the queue.
+      expect(getDownloadRow("sample-1.png")).toHaveClass(
+        "download-item-downloaded",
+      );
+    });
+  });
+
+  // ─── Tag preview tests ───────────────────────────────────────────────
+
+  describe("tag preview", () => {
+    it("previews the pipe cross-product under the shared tags input", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      const preview = screen.getByLabelText("Tag preview");
+      expect(within(preview).getByText("No tags yet.")).toBeVisible();
+
+      await user.type(
+        screen.getByRole("textbox", { name: /tags/i }),
+        "big|huge trees",
+      );
+
+      expect(within(preview).getByText("big trees")).toBeVisible();
+      expect(within(preview).getByText("huge trees")).toBeVisible();
+      expect(within(preview).getByText("2 tags")).toBeVisible();
+    });
+
+    it("previews blank pipe segments and removes duplicates", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.type(
+        screen.getByRole("textbox", { name: /tags/i }),
+        "large trees|, large |trees",
+      );
+
+      const preview = screen.getByLabelText("Tag preview");
+
+      expect(within(preview).getByText("large")).toBeVisible();
+      expect(within(preview).getByText("large trees")).toBeVisible();
+      expect(within(preview).getByText("2 tags")).toBeVisible();
+    });
+
+    it("previews tags under each individual tag input", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const uploadedFiles = [
+        new File(["png-data-1"], "sample-1.png", { type: "image/png" }),
+        new File(["png-data-2"], "sample-2.png", { type: "image/png" }),
+      ];
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        uploadedFiles,
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Tag images individually" }),
+      );
+      await user.type(
+        screen.getByRole("textbox", { name: "Tags for sample-1.png" }),
+        "small|big cat",
+      );
+
+      const firstPreview = screen.getByLabelText(
+        "Tag preview for sample-1.png",
+      );
+      const secondPreview = screen.getByLabelText(
+        "Tag preview for sample-2.png",
+      );
+
+      expect(within(firstPreview).getByText("small cat")).toBeVisible();
+      expect(within(firstPreview).getByText("big cat")).toBeVisible();
+      expect(within(secondPreview).getByText("No tags yet.")).toBeVisible();
+    });
+
+    it("uses the singular label for a single previewed tag", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.type(screen.getByRole("textbox", { name: /tags/i }), "forest");
+
+      const preview = screen.getByLabelText("Tag preview");
+      expect(within(preview).getByText("1 tag")).toBeVisible();
+    });
+  });
+
+  // ─── Image lightbox tests ────────────────────────────────────────────
+
+  describe("image lightbox", () => {
+    it("opens an image preview when the thumbnail is clicked in shared mode", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const uploadedFile = new File(["png-data"], "sample-1.png", {
+        type: "image/png",
+      });
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        uploadedFile,
+      );
+
+      await user.click(
+        screen.getByRole("button", { name: "Open image preview for sample-1.png" }),
+      );
+
+      const dialog = screen.getByRole("dialog", {
+        name: "Image preview for sample-1.png",
+      });
+      expect(dialog.querySelector("img")).not.toBeNull();
+      expect(dialog.querySelector("video")).toBeNull();
+    });
+
+    it("opens an image preview from individual mode", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const uploadedFile = new File(["png-data"], "sample-1.png", {
+        type: "image/png",
+      });
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        uploadedFile,
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Tag images individually" }),
+      );
+
+      await user.click(
+        screen.getByRole("button", { name: "Open image preview for sample-1.png" }),
+      );
+
+      expect(
+        screen.getByRole("dialog", { name: "Image preview for sample-1.png" }),
+      ).toBeVisible();
+    });
+
+    it("zooms an image with the lightbox controls", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const uploadedFile = new File(["png-data"], "sample-1.png", {
+        type: "image/png",
+      });
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        uploadedFile,
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Open image preview for sample-1.png" }),
+      );
+
+      const dialog = screen.getByRole("dialog", {
+        name: "Image preview for sample-1.png",
+      });
+      const image = dialog.querySelector("img") as HTMLImageElement;
+      const zoomIn = screen.getByRole("button", { name: "Zoom in" });
+      const zoomOut = screen.getByRole("button", { name: "Zoom out" });
+      const resetZoom = screen.getByRole("button", { name: "Reset zoom" });
+
+      expect(screen.getByText("100%")).toBeVisible();
+      expect(zoomOut).toBeDisabled();
+      expect(image.style.width).toBe("");
+
+      await user.click(zoomIn);
+      expect(screen.getByText("150%")).toBeVisible();
+      expect(image.style.width).toBe("150%");
+
+      await user.click(resetZoom);
+      expect(screen.getByText("100%")).toBeVisible();
+      expect(image.style.width).toBe("");
+    });
+
+    it("closes the image lightbox with the close button", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const uploadedFile = new File(["png-data"], "sample-1.png", {
+        type: "image/png",
+      });
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        uploadedFile,
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Open image preview for sample-1.png" }),
+      );
+      await user.click(screen.getByRole("button", { name: "Close" }));
+
+      expect(
+        screen.queryByRole("dialog", { name: "Image preview for sample-1.png" }),
+      ).toBeNull();
+    });
+  });
+
+  // ─── PNG-to-JPG conversion tests ─────────────────────────────────────
+
+  describe("PNG-to-JPG conversion", () => {
+    function buildTaggedJpgResponse() {
+      return new Response(new Blob(["tagged-media"]), {
+        status: 200,
+        headers: {
+          "content-disposition": 'attachment; filename="photo.jpg"',
+          "content-type": "image/jpeg",
+        },
+      });
+    }
+
+    it("shows the PNG-to-JPG section, unchecked, when a PNG is selected", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const pngFile = new File(["png-data"], "photo.png", {
+        type: "image/png",
+      });
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      expect(
+        screen.queryByRole("region", { name: "PNG to JPG conversion" }),
+      ).toBeNull();
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        pngFile,
+      );
+
+      expect(
+        screen.getByRole("region", { name: "PNG to JPG conversion" }),
+      ).toBeVisible();
+
+      const checkbox = screen.getByRole("checkbox", {
+        name: /Convert PNG files to JPG/i,
+      });
+      expect(checkbox).toBeVisible();
+      expect(checkbox).not.toBeChecked();
+    });
+
+    it("does not show the PNG-to-JPG section for non-PNG files", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const jpgFile = new File(["jpg-data"], "photo.jpg", {
+        type: "image/jpeg",
+      });
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        jpgFile,
+      );
+
+      expect(
+        screen.queryByRole("checkbox", { name: /Convert PNG files to JPG/i }),
+      ).toBeNull();
+    });
+
+    it("sends convertPngToJpg when the option is enabled", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const pngFile = new File(["png-data"], "photo.png", {
+        type: "image/png",
+      });
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+      fetchMock.mockResolvedValueOnce(buildTaggedJpgResponse());
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        pngFile,
+      );
+      await user.click(
+        screen.getByRole("checkbox", { name: /Convert PNG files to JPG/i }),
+      );
+      await user.type(screen.getByRole("textbox", { name: /tags/i }), "cats");
+      await user.click(
+        screen.getByRole("button", { name: "Tag all and download" }),
+      );
+
+      await waitFor(() => expect(getUploadCalls(fetchMock)).toHaveLength(1));
+
+      const formData = getUploadCalls(fetchMock)[0]?.[1]?.body as FormData;
+      expect(formData.get("convertPngToJpg")).toBe("true");
+
+      await waitFor(() =>
+        expect(screen.getByText("Downloaded photo.jpg.")).toBeVisible(),
+      );
+    });
+
+    it("omits convertPngToJpg when the option is left disabled", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const pngFile = new File(["png-data"], "photo.png", {
+        type: "image/png",
+      });
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+      fetchMock.mockResolvedValueOnce(
+        new Response(new Blob(["tagged-media"]), {
+          status: 200,
+          headers: {
+            "content-disposition": 'attachment; filename="photo.png"',
+            "content-type": "image/png",
+          },
+        }),
+      );
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        pngFile,
+      );
+      await user.type(screen.getByRole("textbox", { name: /tags/i }), "cats");
+      await user.click(
+        screen.getByRole("button", { name: "Tag all and download" }),
+      );
+
+      await waitFor(() => expect(getUploadCalls(fetchMock)).toHaveLength(1));
+
+      const formData = getUploadCalls(fetchMock)[0]?.[1]?.body as FormData;
+      expect(formData.get("convertPngToJpg")).toBeNull();
+    });
+
+    it("shows a per-file Convert to JPG checkbox in individual mode", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const pngFile = new File(["png-data"], "photo.png", {
+        type: "image/png",
+      });
+      const jpgFile = new File(["jpg-data"], "photo.jpg", {
+        type: "image/jpeg",
+      });
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+      fetchMock.mockResolvedValueOnce(buildTaggedJpgResponse());
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        [pngFile, jpgFile],
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Tag images individually" }),
+      );
+
+      const convertCheckbox = screen.getByRole("checkbox", {
+        name: /Convert to JPG/i,
+      });
+      expect(convertCheckbox).toBeVisible();
+      expect(convertCheckbox).not.toBeChecked();
+
+      await user.click(convertCheckbox);
+      await user.type(
+        screen.getByRole("textbox", { name: "Tags for photo.png" }),
+        "cats",
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Tag and download photo.png" }),
+      );
+
+      await waitFor(() => expect(getUploadCalls(fetchMock)).toHaveLength(1));
+
+      const formData = getUploadCalls(fetchMock)[0]?.[1]?.body as FormData;
+      expect(formData.get("convertPngToJpg")).toBe("true");
+    });
+
+    it("offers PNG conversion for a JPG that carries PNG magic bytes", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+
+      const pngMagicBytes = new Uint8Array([
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+        ...new Array(8).fill(0x00),
+      ]);
+      const disguisedFile = new File([pngMagicBytes], "photo.jpg", {
+        type: "image/jpeg",
+      });
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        disguisedFile,
+      );
+
+      await waitFor(() =>
+        expect(
+          screen.getByRole("region", { name: "PNG to JPG conversion" }),
+        ).toBeVisible(),
+      );
+    });
+
+    it("does not offer PNG conversion for a GIF", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const gifFile = new File(["GIF89a"], "animation.gif", {
+        type: "image/gif",
+      });
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        gifFile,
+      );
+
+      expect(
+        screen.queryByRole("checkbox", { name: /Convert PNG files to JPG/i }),
+      ).toBeNull();
     });
   });
 });
