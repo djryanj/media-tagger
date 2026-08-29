@@ -6,7 +6,11 @@ import { promisify } from "node:util";
 
 import { expect, test } from "@playwright/test";
 
-import { createFixture, expectTaggedPayload } from "./helpers/media-roundtrip";
+import {
+  createFixture,
+  expectTaggedPayload,
+  saveFromDownloadRow,
+} from "./helpers/media-roundtrip";
 
 const execFileAsync = promisify(execFile);
 
@@ -55,14 +59,13 @@ test("converts GIF to MP4 with tags when conversion is enabled (shared mode)", a
     await page.locator("#media-tags").fill("forest, timelapse");
 
     const submitButton = page.getByRole("button", {
-      name: "Tag all and download",
+      name: "Tag all files",
     });
     await expect(submitButton).toBeEnabled();
 
-    const [download] = await Promise.all([
-      page.waitForEvent("download"),
-      submitButton.click({ force: true }),
-    ]);
+    await submitButton.click({ force: true });
+
+    const download = await saveFromDownloadRow(page);
 
     // The downloaded file should be an MP4
     const suggestedFilename = download.suggestedFilename();
@@ -106,13 +109,12 @@ test("keeps GIF format when conversion is disabled (shared mode)", async ({
     await page.locator("#media-tags").fill("forest, timelapse");
 
     const submitButton = page.getByRole("button", {
-      name: "Tag all and download",
+      name: "Tag all files",
     });
 
-    const [download] = await Promise.all([
-      page.waitForEvent("download"),
-      submitButton.click({ force: true }),
-    ]);
+    await submitButton.click({ force: true });
+
+    const download = await saveFromDownloadRow(page);
 
     // When conversion is disabled, the file should remain a GIF
     const suggestedFilename = download.suggestedFilename();
@@ -185,12 +187,11 @@ test("converts GIF to MP4 in individual mode when per-file checkbox is checked",
     });
     await tagsInput.fill("forest, timelapse");
 
-    const [download] = await Promise.all([
-      page.waitForEvent("download"),
-      page
-        .getByRole("button", { name: /Tag and download sample.gif/i })
-        .click({ force: true }),
-    ]);
+    await page
+      .getByRole("button", { name: /Tag sample.gif/i })
+      .click({ force: true });
+
+    const download = await saveFromDownloadRow(page);
 
     const suggestedFilename = download.suggestedFilename();
     expect(suggestedFilename).toMatch(/\.mp4$/i);

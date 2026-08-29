@@ -33,7 +33,7 @@ const GIF_FFMPEG_ARGS = [
   "1",
 ];
 
-test("lists every queued file and turns each row green once downloaded", async ({
+test("lists every queued file, downloads none of them on its own, and turns a row green once saved", async ({
   page,
 }) => {
   const temporaryDirectory = await mkdtemp(join(tmpdir(), "media-tagger-e2e-dm-"));
@@ -52,7 +52,7 @@ test("lists every queued file and turns each row green once downloaded", async (
     page.on("download", (download) => downloads.push(download));
 
     await page
-      .getByRole("button", { name: "Tag all and download" })
+      .getByRole("button", { name: "Tag all files" })
       .click({ force: true });
 
     const downloadManager = page.getByLabel("Downloads");
@@ -67,15 +67,56 @@ test("lists every queued file and turns each row green once downloaded", async (
       downloadManager.getByRole("button", { name: "Toggle details for sample-b.webp" }),
     ).toBeVisible();
 
-    // Each row turns green (download-item-downloaded) after a successful save.
-    await expect(downloadManager.locator(".download-item-downloaded")).toHaveCount(2);
-    await expect(downloadManager.getByText("Downloaded")).toHaveCount(2);
+    // Nothing downloads on its own, so the rows wait at amber.
+    await expect(downloadManager.locator(".download-item-ready")).toHaveCount(2);
+    await expect(downloadManager.getByText("Ready to download")).toHaveCount(2);
+    await expect(
+      downloadManager.locator(".download-item-downloaded"),
+    ).toHaveCount(0);
+    await expect(downloadManager.getByText("0 of 2 downloaded")).toBeVisible();
 
-    const rowBackground = await downloadManager
-      .locator(".download-item-downloaded")
-      .first()
-      .evaluate((row) => getComputedStyle(row).backgroundColor);
-    expect(rowBackground).toBe("rgb(237, 248, 237)");
+    // Rows animate between states, so settle on the final computed colour.
+    await expect
+      .poll(() =>
+        downloadManager
+          .locator(".download-item-ready")
+          .first()
+          .evaluate((row) => getComputedStyle(row).backgroundColor),
+      )
+      .toBe("rgb(253, 246, 230)");
+
+    expect(downloads).toHaveLength(0);
+
+    // Tapping a row's own download button is the only way a file is saved.
+    const downloadButtons = downloadManager.locator(".download-item-download");
+
+    await downloadButtons.first().evaluate((button) => {
+      (button as HTMLButtonElement).click();
+    });
+    await expect(
+      downloadManager.locator(".download-item-downloaded"),
+    ).toHaveCount(1);
+    await expect(downloadManager.getByText("1 of 2 downloaded")).toBeVisible();
+
+    await downloadButtons.nth(1).evaluate((button) => {
+      (button as HTMLButtonElement).click();
+    });
+    await expect(
+      downloadManager.locator(".download-item-downloaded"),
+    ).toHaveCount(2);
+    await expect(
+      downloadManager.getByText("Downloaded", { exact: true }),
+    ).toHaveCount(2);
+    await expect(downloadManager.getByText("2 of 2 downloaded")).toBeVisible();
+
+    await expect
+      .poll(() =>
+        downloadManager
+          .locator(".download-item-downloaded")
+          .first()
+          .evaluate((row) => getComputedStyle(row).backgroundColor),
+      )
+      .toBe("rgb(237, 248, 237)");
 
     await expect
       .poll(() => downloads.length, { message: "Expected 2 download events." })
@@ -99,7 +140,7 @@ test("expands a download row to show the thumbnail, saved name, and tags", async
     await page.locator("#media-tags").fill("big|huge trees");
 
     await page
-      .getByRole("button", { name: "Tag all and download" })
+      .getByRole("button", { name: "Tag all files" })
       .click({ force: true });
 
     const row = page.locator(".download-item").first();
@@ -131,7 +172,7 @@ test("expands a download row to show the thumbnail, saved name, and tags", async
   }
 });
 
-test("re-downloads a tagged file from its download row", async ({ page }) => {
+test("downloads a tagged file from its download row", async ({ page }) => {
   const temporaryDirectory = await mkdtemp(join(tmpdir(), "media-tagger-e2e-dm-"));
   const pngPath = join(temporaryDirectory, "sample-a.png");
   const downloadPath = join(temporaryDirectory, "manual-sample-a.png");
@@ -144,10 +185,10 @@ test("re-downloads a tagged file from its download row", async ({ page }) => {
     await page.locator("#media-tags").fill("forest, timelapse");
 
     await page
-      .getByRole("button", { name: "Tag all and download" })
+      .getByRole("button", { name: "Tag all files" })
       .click({ force: true });
 
-    await expect(page.locator(".download-item-downloaded")).toHaveCount(1);
+    await expect(page.locator(".download-item-ready")).toHaveCount(1);
 
     const [manualDownload] = await Promise.all([
       page.waitForEvent("download"),
@@ -160,9 +201,54 @@ test("re-downloads a tagged file from its download row", async ({ page }) => {
 
     await manualDownload.saveAs(downloadPath);
     await expectTaggedPayload(downloadPath, ["XMP-dc:Description"]);
+    await expect(page.getByText("Downloaded sample-a.png.")).toBeVisible();
+    await expect(page.locator(".download-item-downloaded")).toHaveCount(1);
     await expect(
-      page.getByText("Manual download started for sample-a.png."),
+      page.getByRole("button", { name: "Download sample-a.png" }),
+    ).toHaveText("Download again");
+  } finally {
+    await rm(temporaryDirectory, { force: true, recursive: true });
+  }
+});
+
+test("tells the user how to save the file inside a ready row", async ({
+  page,
+}) => {
+  const temporaryDirectory = await mkdtemp(join(tmpdir(), "media-tagger-e2e-dm-"));
+  const pngPath = join(temporaryDirectory, "sample-a.png");
+
+  try {
+    await createFixture(pngPath, PNG_FFMPEG_ARGS);
+
+    await page.goto("/");
+    await page.locator("#media-file").setInputFiles(pngPath);
+    await page.locator("#media-tags").fill("forest");
+
+    await page
+      .getByRole("button", { name: "Tag all files" })
+      .click({ force: true });
+
+    const row = page.locator(".download-item").first();
+    await expect(row).toHaveClass(/download-item-ready/);
+
+    await page
+      .getByRole("button", { name: "Toggle details for sample-a.png" })
+      .click();
+
+    await expect(
+      row.getByText(
+        "Tap Download to save this file. Nothing is saved until you do.",
+      ),
     ).toBeVisible();
+
+    await page
+      .getByRole("button", { name: "Download sample-a.png" })
+      .evaluate((button) => {
+        (button as HTMLButtonElement).click();
+      });
+
+    await expect(row).toHaveClass(/download-item-downloaded/);
+    await expect(row.locator(".download-item-note")).toHaveCount(0);
   } finally {
     await rm(temporaryDirectory, { force: true, recursive: true });
   }
@@ -180,7 +266,7 @@ test("shows GIF conversion status inside the download row", async ({ page }) => 
     await page.locator("#media-tags").fill("forest");
 
     await page
-      .getByRole("button", { name: "Tag all and download" })
+      .getByRole("button", { name: "Tag all files" })
       .click({ force: true });
 
     const row = page.locator(".download-item").first();
@@ -188,7 +274,7 @@ test("shows GIF conversion status inside the download row", async ({ page }) => 
 
     // The conversion finishes quickly for a tiny GIF, so assert on the end
     // state and on the row reporting the converted filename.
-    await expect(row).toHaveClass(/download-item-downloaded/);
+    await expect(row).toHaveClass(/download-item-ready/);
 
     await page
       .getByRole("button", { name: "Toggle details for animation.gif" })
@@ -225,13 +311,13 @@ test("marks a failed file as failed and keeps the other rows intact", async ({
     await page.locator("#media-tags").fill("forest");
 
     await page
-      .getByRole("button", { name: "Tag all and download" })
+      .getByRole("button", { name: "Tag all files" })
       .click({ force: true });
 
     const downloadManager = page.getByLabel("Downloads");
     await expect(downloadManager.locator(".download-item")).toHaveCount(2);
     await expect(downloadManager.locator(".download-item-failed")).toHaveCount(1);
-    await expect(downloadManager.locator(".download-item-downloaded")).toHaveCount(1);
+    await expect(downloadManager.locator(".download-item-ready")).toHaveCount(1);
 
     await page
       .getByRole("button", { name: "Toggle details for broken.png" })

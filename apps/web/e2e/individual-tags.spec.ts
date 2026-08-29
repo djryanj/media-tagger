@@ -7,6 +7,7 @@ import { expect, test, type Download, type Locator } from "@playwright/test";
 import {
   createFixture,
   expectTaggedPayload,
+  saveFromDownloadRow,
   type MediaFixture,
 } from "./helpers/media-roundtrip";
 
@@ -108,26 +109,22 @@ test("round-trips metadata for individually tagged files with copy and paste", a
     );
 
     const submitButton = page.getByRole("button", {
-      name: "Tag all and download",
+      name: "Tag all files",
     });
     await expect(submitButton).toBeEnabled();
 
-    const downloads: Download[] = [];
-    const handleDownload = (download: Download) => {
-      downloads.push(download);
-    };
-
-    page.on("download", handleDownload);
-
     await submitButton.click({ force: true });
 
-    await expect
-      .poll(() => downloads.length, {
-        message: `Expected ${fixtures.length} download events.`,
-      })
-      .toBe(fixtures.length);
+    await expect(page.getByText("Tagged 2 of 2 files.")).toBeVisible();
+    await expect(page.locator(".download-item-ready")).toHaveCount(
+      fixtures.length,
+    );
 
-    page.off("download", handleDownload);
+    const downloads: Download[] = [];
+
+    for (let rowIndex = 0; rowIndex < fixtures.length; rowIndex += 1) {
+      downloads.push(await saveFromDownloadRow(page, rowIndex));
+    }
 
     await Promise.all(
       downloads.map(async (download, index) => {
@@ -147,7 +144,9 @@ test("round-trips metadata for individually tagged files with copy and paste", a
       }),
     );
 
-    await expect(page.getByText("Downloaded 2 of 2 files.")).toBeVisible();
+    await expect(page.locator(".download-item-downloaded")).toHaveCount(
+      fixtures.length,
+    );
   } finally {
     await rm(temporaryDirectory, { force: true, recursive: true });
   }

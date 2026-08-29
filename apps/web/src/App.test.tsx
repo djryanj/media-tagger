@@ -214,7 +214,7 @@ describe("App", () => {
     expect(screen.getByText("Version v0.3.0 | Commit abc12345")).toBeVisible();
 
     await user.click(
-      screen.getByRole("button", { name: "Tag all and download" }),
+      screen.getByRole("button", { name: "Tag all files" }),
     );
 
     expect(
@@ -269,7 +269,7 @@ describe("App", () => {
       "forest, timelapse",
     );
     await user.click(
-      screen.getByRole("button", { name: "Tag all and download" }),
+      screen.getByRole("button", { name: "Tag all files" }),
     );
 
     await waitFor(() => expect(getUploadCalls(fetchMock)).toHaveLength(2));
@@ -285,8 +285,8 @@ describe("App", () => {
     expect(firstFormData.get("tags")).toBe("forest, timelapse");
     expect((firstFormData.get("file") as File).name).toBe("sample-1.png");
     expect((secondFormData.get("file") as File).name).toBe("sample-2.png");
-    expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledTimes(2);
-    expect(screen.getByText("Downloaded 2 of 2 files.")).toBeVisible();
+    expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled();
+    expect(screen.getByText("Tagged 2 of 2 files.")).toBeVisible();
     expect(screen.getByText("Downloads")).toBeVisible();
     expect(
       screen.getByRole("button", { name: "Download tagged-sample-1.png" }),
@@ -331,19 +331,19 @@ describe("App", () => {
       "forest, timelapse",
     );
     await user.click(
-      screen.getByRole("button", { name: "Tag all and download" }),
+      screen.getByRole("button", { name: "Tag all files" }),
     );
 
     await waitFor(() => expect(getUploadCalls(fetchMock)).toHaveLength(1));
-    expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledTimes(1);
+    expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled();
 
     await user.click(
       screen.getByRole("button", { name: "Download tagged-sample-1.png" }),
     );
 
-    expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledTimes(2);
+    expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledTimes(1);
     expect(
-      screen.getByText("Manual download started for tagged-sample-1.png."),
+      screen.getByText("Downloaded tagged-sample-1.png."),
     ).toBeVisible();
   });
 
@@ -433,7 +433,7 @@ describe("App", () => {
       "desert",
     );
     await user.click(
-      screen.getByRole("button", { name: "Tag all and download" }),
+      screen.getByRole("button", { name: "Tag all files" }),
     );
 
     await waitFor(() => expect(getUploadCalls(fetchMock)).toHaveLength(2));
@@ -446,7 +446,7 @@ describe("App", () => {
 
     expect(firstFormData.get("tags")).toBe("forest");
     expect(secondFormData.get("tags")).toBe("desert");
-    expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledTimes(2);
+    expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled();
   });
 
   it("shows a video preview for mp4 files in individual mode", async () => {
@@ -688,7 +688,7 @@ describe("App", () => {
     ).toBeNull();
 
     await user.click(
-      screen.getByRole("button", { name: "Tag all and download" }),
+      screen.getByRole("button", { name: "Tag all files" }),
     );
 
     await waitFor(() => expect(getUploadCalls(fetchMock)).toHaveLength(1));
@@ -753,7 +753,7 @@ describe("App", () => {
     );
 
     await user.click(
-      screen.getByRole("button", { name: "Tag and download sample-1.png" }),
+      screen.getByRole("button", { name: "Tag sample-1.png" }),
     );
 
     await waitFor(() => expect(getUploadCalls(fetchMock)).toHaveLength(1));
@@ -763,7 +763,7 @@ describe("App", () => {
 
     expect(firstFormData.get("tags")).toBe("forest");
     expect((firstFormData.get("file") as File).name).toBe("sample-1.png");
-    expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledTimes(1);
+    expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled();
     expect(
       screen.queryByRole("textbox", { name: "Tags for sample-1.png" }),
     ).toBeNull();
@@ -772,12 +772,12 @@ describe("App", () => {
     ).toBeVisible();
     expect(
       screen.getByText(
-        "Downloaded tagged-sample-1.png and removed sample-1.png from the queue.",
+        "Tagged tagged-sample-1.png and removed sample-1.png from the queue.",
       ),
     ).toBeVisible();
 
     await user.click(
-      screen.getByRole("button", { name: "Tag all and download" }),
+      screen.getByRole("button", { name: "Tag all files" }),
     );
 
     await waitFor(() => expect(getUploadCalls(fetchMock)).toHaveLength(2));
@@ -856,7 +856,7 @@ describe("App", () => {
     );
     await user.type(screen.getByRole("textbox", { name: /tags/i }), "test");
     await user.click(
-      screen.getByRole("button", { name: "Tag all and download" }),
+      screen.getByRole("button", { name: "Tag all files" }),
     );
 
     expect(screen.getByText("Choose files no larger than 1 KB.")).toBeVisible();
@@ -895,7 +895,7 @@ describe("App", () => {
     expect(screen.queryByRole("region", { name: "Downloads" })).toBeNull();
 
     await user.click(
-      screen.getByRole("button", { name: "Tag all and download" }),
+      screen.getByRole("button", { name: "Tag all files" }),
     );
 
     await waitFor(() =>
@@ -1133,7 +1133,7 @@ describe("App", () => {
         "test-tag",
       );
       await user.click(
-        screen.getByRole("button", { name: "Tag all and download" }),
+        screen.getByRole("button", { name: "Tag all files" }),
       );
 
       await waitFor(() => expect(getUploadCalls(fetchMock)).toHaveLength(1));
@@ -1196,7 +1196,7 @@ describe("App", () => {
         "test-tag",
       );
       await user.click(
-        screen.getByRole("button", { name: "Tag all and download" }),
+        screen.getByRole("button", { name: "Tag all files" }),
       );
 
       await waitFor(() => expect(getUploadCalls(fetchMock)).toHaveLength(1));
@@ -1409,7 +1409,7 @@ describe("App", () => {
         "cats, dogs",
       );
       await user.click(
-        screen.getByRole("button", { name: "Tag all and download" }),
+        screen.getByRole("button", { name: "Tag all files" }),
       );
 
       await waitFor(() =>
@@ -1426,9 +1426,9 @@ describe("App", () => {
       expect((formData.get("file") as File).name).toBe("animation.gif");
 
       await waitFor(() =>
-        expect(screen.getByText("Downloaded animation.mp4.")).toBeVisible(),
+        expect(screen.getByText("Tagged animation.mp4.")).toBeVisible(),
       );
-      expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledTimes(1);
+      expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled();
     });
 
     it("uses /api/media/tag (not stream) when GIF conversion is disabled", async () => {
@@ -1466,7 +1466,7 @@ describe("App", () => {
 
       await user.type(screen.getByRole("textbox", { name: /tags/i }), "cats");
       await user.click(
-        screen.getByRole("button", { name: "Tag all and download" }),
+        screen.getByRole("button", { name: "Tag all files" }),
       );
 
       await waitFor(() => expect(getUploadCalls(fetchMock)).toHaveLength(1));
@@ -1541,13 +1541,13 @@ describe("App", () => {
       );
       await user.type(screen.getByRole("textbox", { name: /tags/i }), "cats");
       await user.click(
-        screen.getByRole("button", { name: "Tag all and download" }),
+        screen.getByRole("button", { name: "Tag all files" }),
       );
 
       await waitFor(() =>
-        expect(screen.getByText("Downloaded animation.mp4.")).toBeVisible(),
+        expect(screen.getByText("Tagged animation.mp4.")).toBeVisible(),
       );
-      expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledTimes(1);
+      expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled();
     });
 
     it("shows an error message when the stream returns an error event", async () => {
@@ -1573,7 +1573,7 @@ describe("App", () => {
       );
       await user.type(screen.getByRole("textbox", { name: /tags/i }), "cats");
       await user.click(
-        screen.getByRole("button", { name: "Tag all and download" }),
+        screen.getByRole("button", { name: "Tag all files" }),
       );
 
       await waitFor(() =>
@@ -1632,7 +1632,7 @@ describe("App", () => {
 
       await user.type(screen.getByRole("textbox", { name: /tags/i }), "cats");
       await user.click(
-        screen.getByRole("button", { name: "Tag all and download" }),
+        screen.getByRole("button", { name: "Tag all files" }),
       );
 
       await waitFor(() =>
@@ -1646,7 +1646,7 @@ describe("App", () => {
       expect((formData.get("file") as File).name).toBe("photo.jpg");
 
       await waitFor(() =>
-        expect(screen.getByText("Downloaded photo.mp4.")).toBeVisible(),
+        expect(screen.getByText("Tagged photo.mp4.")).toBeVisible(),
       );
     });
   });
@@ -1739,7 +1739,7 @@ describe("App", () => {
         "forest",
       );
       await user.click(
-        screen.getByRole("button", { name: "Tag all and download" }),
+        screen.getByRole("button", { name: "Tag all files" }),
       );
 
       // Both rows must be present before the first upload has resolved.
@@ -1753,11 +1753,11 @@ describe("App", () => {
       resolveFirstUpload(buildTaggedResponse("tagged-sample-1.png"));
 
       await waitFor(() =>
-        expect(screen.getByText("Downloaded 2 of 2 files.")).toBeVisible(),
+        expect(screen.getByText("Tagged 2 of 2 files.")).toBeVisible(),
       );
     });
 
-    it("marks a successfully downloaded row as downloaded", async () => {
+    it("leaves a tagged row ready and downloads nothing on its own", async () => {
       const user = userEvent.setup();
       const fetchMock = vi.mocked(fetch);
       const uploadedFile = new File(["png-data"], "sample-1.png", {
@@ -1778,7 +1778,52 @@ describe("App", () => {
       );
       await user.type(screen.getByRole("textbox", { name: /tags/i }), "forest");
       await user.click(
-        screen.getByRole("button", { name: "Tag all and download" }),
+        screen.getByRole("button", { name: "Tag all files" }),
+      );
+
+      await waitFor(() =>
+        expect(getDownloadRow("sample-1.png")).toHaveClass(
+          "download-item-ready",
+        ),
+      );
+
+      // Nothing is saved until the user asks for it.
+      expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled();
+      expect(getDownloadRow("sample-1.png")).not.toHaveClass(
+        "download-item-downloaded",
+      );
+      expect(screen.getByText("Ready to download")).toBeVisible();
+      expect(screen.getByText("0 of 1 downloaded")).toBeVisible();
+    });
+
+    it("turns a row green only after its own download button is tapped", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const uploadedFile = new File(["png-data"], "sample-1.png", {
+        type: "image/png",
+      });
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+      fetchMock.mockResolvedValueOnce(
+        buildTaggedResponse("tagged-sample-1.png"),
+      );
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        uploadedFile,
+      );
+      await user.type(screen.getByRole("textbox", { name: /tags/i }), "forest");
+      await user.click(
+        screen.getByRole("button", { name: "Tag all files" }),
+      );
+
+      await user.click(
+        await screen.findByRole("button", {
+          name: "Download tagged-sample-1.png",
+        }),
       );
 
       await waitFor(() =>
@@ -1786,7 +1831,98 @@ describe("App", () => {
           "download-item-downloaded",
         ),
       );
-      expect(screen.getByText("Downloaded")).toBeVisible();
+      expect(
+        within(getDownloadRow("sample-1.png")).getByText("Downloaded"),
+      ).toBeVisible();
+      expect(screen.getByText("1 of 1 downloaded")).toBeVisible();
+    });
+
+    it("counts only the rows whose download was confirmed", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const uploadedFiles = [
+        new File(["png-data-1"], "sample-1.png", { type: "image/png" }),
+        new File(["png-data-2"], "sample-2.png", { type: "image/png" }),
+      ];
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+      fetchMock.mockResolvedValueOnce(
+        buildTaggedResponse("tagged-sample-1.png"),
+      );
+      fetchMock.mockResolvedValueOnce(
+        buildTaggedResponse("tagged-sample-2.png"),
+      );
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        uploadedFiles,
+      );
+      await user.type(screen.getByRole("textbox", { name: /tags/i }), "forest");
+      await user.click(
+        screen.getByRole("button", { name: "Tag all files" }),
+      );
+
+      await waitFor(() =>
+        expect(screen.getByText("Tagged 2 of 2 files.")).toBeVisible(),
+      );
+      expect(screen.getByText("0 of 2 downloaded")).toBeVisible();
+
+      await user.click(
+        screen.getByRole("button", { name: "Download tagged-sample-1.png" }),
+      );
+
+      expect(screen.getByText("1 of 2 downloaded")).toBeVisible();
+      expect(getDownloadRow("sample-2.png")).toHaveClass("download-item-ready");
+    });
+
+    it("tells the user how to save the file inside an expanded ready row", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      const uploadedFile = new File(["png-data"], "sample-1.png", {
+        type: "image/png",
+      });
+
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+      fetchMock.mockResolvedValueOnce(
+        buildTaggedResponse("tagged-sample-1.png"),
+      );
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        uploadedFile,
+      );
+      await user.type(screen.getByRole("textbox", { name: /tags/i }), "forest");
+      await user.click(
+        screen.getByRole("button", { name: "Tag all files" }),
+      );
+
+      await user.click(
+        await screen.findByRole("button", {
+          name: "Toggle details for sample-1.png",
+        }),
+      );
+
+      expect(
+        screen.getByText(
+          "Tap Download to save this file. Nothing is saved until you do.",
+        ),
+      ).toBeVisible();
+
+      await user.click(
+        screen.getByRole("button", { name: "Download tagged-sample-1.png" }),
+      );
+
+      expect(
+        screen.queryByText(
+          "Tap Download to save this file. Nothing is saved until you do.",
+        ),
+      ).toBeNull();
     });
 
     it("marks a failed row as failed and shows the reason in its details", async () => {
@@ -1813,7 +1949,7 @@ describe("App", () => {
       );
       await user.type(screen.getByRole("textbox", { name: /tags/i }), "forest");
       await user.click(
-        screen.getByRole("button", { name: "Tag all and download" }),
+        screen.getByRole("button", { name: "Tag all files" }),
       );
 
       await waitFor(() =>
@@ -1854,7 +1990,7 @@ describe("App", () => {
       );
       await user.type(screen.getByRole("textbox", { name: /tags/i }), "forest");
       await user.click(
-        screen.getByRole("button", { name: "Tag all and download" }),
+        screen.getByRole("button", { name: "Tag all files" }),
       );
 
       const toggle = await screen.findByRole("button", {
@@ -1896,7 +2032,7 @@ describe("App", () => {
       );
       await user.type(screen.getByRole("textbox", { name: /tags/i }), "forest");
       await user.click(
-        screen.getByRole("button", { name: "Tag all and download" }),
+        screen.getByRole("button", { name: "Tag all files" }),
       );
 
       const downloads = await screen.findByRole("region", { name: "Downloads" });
@@ -1930,7 +2066,7 @@ describe("App", () => {
       );
       await user.type(screen.getByRole("textbox", { name: /tags/i }), "cats");
       await user.click(
-        screen.getByRole("button", { name: "Tag all and download" }),
+        screen.getByRole("button", { name: "Tag all files" }),
       );
 
       const downloads = await screen.findByRole("region", { name: "Downloads" });
@@ -1961,8 +2097,16 @@ describe("App", () => {
 
       await waitFor(() =>
         expect(getDownloadRow("animation.gif")).toHaveClass(
-          "download-item-downloaded",
+          "download-item-ready",
         ),
+      );
+
+      await user.click(
+        screen.getByRole("button", { name: "Download animation.mp4" }),
+      );
+
+      expect(getDownloadRow("animation.gif")).toHaveClass(
+        "download-item-downloaded",
       );
     });
 
@@ -2002,26 +2146,31 @@ describe("App", () => {
       );
 
       await user.click(
-        screen.getByRole("button", { name: "Tag and download sample-1.png" }),
+        screen.getByRole("button", { name: "Tag sample-1.png" }),
       );
 
       await waitFor(() =>
         expect(getDownloadRow("sample-1.png")).toHaveClass(
-          "download-item-downloaded",
+          "download-item-ready",
         ),
       );
 
       await user.click(
-        screen.getByRole("button", { name: "Tag and download sample-2.png" }),
+        screen.getByRole("button", { name: "Download tagged-sample-1.png" }),
+      );
+
+      await user.click(
+        screen.getByRole("button", { name: "Tag sample-2.png" }),
       );
 
       await waitFor(() =>
         expect(getDownloadRow("sample-2.png")).toHaveClass(
-          "download-item-downloaded",
+          "download-item-ready",
         ),
       );
 
-      // The first row is still listed even though its file left the queue.
+      // The first row keeps its confirmed state even though its file left the
+      // queue and a later submission re-rendered the list.
       expect(getDownloadRow("sample-1.png")).toHaveClass(
         "download-item-downloaded",
       );
@@ -2344,7 +2493,7 @@ describe("App", () => {
       );
       await user.type(screen.getByRole("textbox", { name: /tags/i }), "cats");
       await user.click(
-        screen.getByRole("button", { name: "Tag all and download" }),
+        screen.getByRole("button", { name: "Tag all files" }),
       );
 
       await waitFor(() => expect(getUploadCalls(fetchMock)).toHaveLength(1));
@@ -2353,7 +2502,7 @@ describe("App", () => {
       expect(formData.get("convertPngToJpg")).toBe("true");
 
       await waitFor(() =>
-        expect(screen.getByText("Downloaded photo.jpg.")).toBeVisible(),
+        expect(screen.getByText("Tagged photo.jpg.")).toBeVisible(),
       );
     });
 
@@ -2384,7 +2533,7 @@ describe("App", () => {
       );
       await user.type(screen.getByRole("textbox", { name: /tags/i }), "cats");
       await user.click(
-        screen.getByRole("button", { name: "Tag all and download" }),
+        screen.getByRole("button", { name: "Tag all files" }),
       );
 
       await waitFor(() => expect(getUploadCalls(fetchMock)).toHaveLength(1));
@@ -2429,7 +2578,7 @@ describe("App", () => {
         "cats",
       );
       await user.click(
-        screen.getByRole("button", { name: "Tag and download photo.png" }),
+        screen.getByRole("button", { name: "Tag photo.png" }),
       );
 
       await waitFor(() => expect(getUploadCalls(fetchMock)).toHaveLength(1));

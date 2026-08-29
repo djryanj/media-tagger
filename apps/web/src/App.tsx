@@ -23,10 +23,19 @@ type ServerConfig = {
   version: string;
 };
 
+/**
+ * Nothing downloads on its own. A browser cannot tell us that a blob download
+ * landed on the device — the anchor click is fire-and-forget, and mobile
+ * browsers routinely stack, defer, or silently drop those notifications — so
+ * automatic downloads produced saves nobody could see or verify. A tagged file
+ * waits at `ready` until the user downloads it from its row, which is the one
+ * thing we can observe.
+ */
 type DownloadStatus =
   | "queued"
   | "converting"
   | "tagging"
+  | "ready"
   | "downloaded"
   | "failed";
 
@@ -48,8 +57,8 @@ type TagAssignment = {
 };
 
 type ProcessTagAssignmentsResult = {
-  downloadedFilenames: string[];
   failures: Array<{ file: string; message: string }>;
+  taggedFilenames: string[];
 };
 
 type LightboxTarget = {
@@ -354,7 +363,7 @@ export default function App() {
     tagAssignments: TagAssignment[],
     options?: {
       resetResults?: boolean;
-      successStatus?: (downloadedFilenames: string[]) => string;
+      successStatus?: (taggedFilenames: string[]) => string;
       totalCountLabel?: number;
     },
   ): Promise<ProcessTagAssignmentsResult> {
@@ -389,7 +398,7 @@ export default function App() {
     );
 
     const failures: Array<{ file: string; message: string }> = [];
-    const downloadedFilenames: string[] = [];
+    const taggedFilenames: string[] = [];
     const responseWarnings = new Set<string>();
 
     try {
@@ -518,13 +527,12 @@ export default function App() {
             });
             const gifDownloadFilename = donePayload.filename;
 
-            triggerDownload(gifBlob, gifDownloadFilename);
-            downloadedFilenames.push(gifDownloadFilename);
+            taggedFilenames.push(gifDownloadFilename);
 
             updateDownloadItem(fileId, {
               blob: gifBlob,
               downloadFilename: gifDownloadFilename,
-              status: "downloaded",
+              status: "ready",
               tags: Array.isArray(donePayload.tags)
                 ? donePayload.tags
                 : normalizeTags(value),
@@ -571,13 +579,12 @@ export default function App() {
               responseWarnings.add(resolutionWarning);
             }
 
-            triggerDownload(blob, downloadFilename);
-            downloadedFilenames.push(downloadFilename);
+            taggedFilenames.push(downloadFilename);
 
             updateDownloadItem(fileId, {
               blob,
               downloadFilename,
-              status: "downloaded",
+              status: "ready",
               tags: confirmedTags ?? normalizeTags(value),
             });
           }
@@ -612,20 +619,20 @@ export default function App() {
         );
       }
 
-      if (downloadedFilenames.length === 0) {
+      if (taggedFilenames.length === 0) {
         setStatus("Request failed.");
-        return { downloadedFilenames, failures };
+        return { failures, taggedFilenames };
       }
 
       setStatus(
         options?.successStatus
-          ? options.successStatus(downloadedFilenames)
-          : downloadedFilenames.length === 1 && failures.length === 0
-            ? `Downloaded ${downloadedFilenames[0]}.`
-            : `Downloaded ${downloadedFilenames.length} of ${totalCountLabel} files.`,
+          ? options.successStatus(taggedFilenames)
+          : taggedFilenames.length === 1 && failures.length === 0
+            ? `Tagged ${taggedFilenames[0]}.`
+            : `Tagged ${taggedFilenames.length} of ${totalCountLabel} files.`,
       );
 
-      return { downloadedFilenames, failures };
+      return { failures, taggedFilenames };
     } finally {
       setIsSubmitting(false);
     }
@@ -699,8 +706,11 @@ export default function App() {
       return;
     }
 
+    // The only download the app ever starts, and the only one it can report on:
+    // the user asked for it, so they can see it happen.
     triggerDownload(item.blob, item.downloadFilename);
-    setStatus(`Manual download started for ${item.downloadFilename}.`);
+    updateDownloadItem(item.id, { status: "downloaded" });
+    setStatus(`Downloaded ${item.downloadFilename}.`);
   }
 
   function handleTagModeChange(nextMode: TagMode) {
@@ -778,11 +788,11 @@ export default function App() {
     const result = await processTagAssignments(tagAssignments, {
       resetResults: false,
       totalCountLabel: 1,
-      successStatus: (downloadedFilenames) =>
-        `Downloaded ${downloadedFilenames[0] ?? file.name} and removed ${file.name} from the queue.`,
+      successStatus: (taggedFilenames) =>
+        `Tagged ${taggedFilenames[0] ?? file.name} and removed ${file.name} from the queue.`,
     });
 
-    if (result.downloadedFilenames.length > 0 && result.failures.length === 0) {
+    if (result.taggedFilenames.length > 0 && result.failures.length === 0) {
       removeQueuedFile(file, true);
     }
   }
@@ -1106,13 +1116,13 @@ export default function App() {
                               {copiedFromLabel}
                             </button>
                             <button
-                              aria-label={`Tag and download ${file.name}`}
+                              aria-label={`Tag ${file.name}`}
                               className="secondary-button"
                               disabled={isSubmitting}
                               onClick={() => void handleSingleFileSubmit(file)}
                               type="button"
                             >
-                              Tag and download
+                              Tag file
                             </button>
                             <button
                               aria-label={`Remove ${file.name}`}
@@ -1153,7 +1163,7 @@ export default function App() {
             disabled={isSubmitting}
             type="submit"
           >
-            {isSubmitting ? "Writing metadata..." : "Tag all and download"}
+            {isSubmitting ? "Writing metadata..." : "Tag all files"}
           </button>
         </form>
 
@@ -1162,10 +1172,15 @@ export default function App() {
             <div className="download-manager-header">
               <h2>Downloads</h2>
               <p className="field-help">
-                Every queued file is listed here. Automatic download is
-                attempted as soon as a file finishes; if your device delayed or
-                blocked one, use its download button.
+                Every queued file is listed here. Tap a row&rsquo;s download
+                button to save that file; the row turns green once you do.
+                Nothing downloads on its own, so nothing gets lost behind a
+                dismissed browser prompt.
               </p>
+              <p
+                aria-live="polite"
+                className="download-manager-summary"
+              >{`${countConfirmedDownloads(downloadItems)} of ${downloadItems.length} downloaded`}</p>
             </div>
 
             <ul className="download-item-list">
@@ -1284,12 +1299,14 @@ function DownloadRow({
         </button>
         <button
           aria-label={`Download ${item.downloadFilename ?? item.sourceFilename}`}
-          className="secondary-button download-item-download"
+          className={`secondary-button download-item-download ${
+            item.status === "ready" ? "download-item-download-pending" : ""
+          }`}
           disabled={!item.blob}
           onClick={onDownload}
           type="button"
         >
-          Download
+          {item.status === "downloaded" ? "Download again" : "Download"}
         </button>
       </div>
 
@@ -1330,6 +1347,11 @@ function DownloadRow({
               No tags confirmed by the server yet.
             </span>
           )}
+          {item.status === "ready" ? (
+            <span className="download-item-note">
+              Tap Download to save this file. Nothing is saved until you do.
+            </span>
+          ) : null}
           {item.errorMessage ? (
             <span className="download-item-error">{item.errorMessage}</span>
           ) : null}
@@ -1574,11 +1596,17 @@ function formatDownloadStatus(item: DownloadItem): string {
         : `Converting to MP4... ${item.conversionPercent}%`;
     case "tagging":
       return "Writing metadata...";
+    case "ready":
+      return "Ready to download";
     case "downloaded":
       return "Downloaded";
     case "failed":
       return "Failed";
   }
+}
+
+function countConfirmedDownloads(items: DownloadItem[]): number {
+  return items.filter((item) => item.status === "downloaded").length;
 }
 
 function formatSelectedFileSummary(files: File[]): string {

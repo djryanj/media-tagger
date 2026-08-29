@@ -6,7 +6,11 @@ import { promisify } from "node:util";
 
 import { expect, test } from "@playwright/test";
 
-import { createFixture, expectTaggedPayload } from "./helpers/media-roundtrip";
+import {
+  createFixture,
+  expectTaggedPayload,
+  saveFromDownloadRow,
+} from "./helpers/media-roundtrip";
 
 const execFileAsync = promisify(execFile);
 
@@ -74,12 +78,11 @@ test("converts a PNG to a tagged JPG when the option is enabled", async ({
     await page.getByLabel("PNG to JPG conversion").getByRole("checkbox").check();
     await page.locator("#media-tags").fill("forest, timelapse");
 
-    const [download] = await Promise.all([
-      page.waitForEvent("download"),
-      page
-        .getByRole("button", { name: "Tag all and download" })
-        .click({ force: true }),
-    ]);
+    await page
+      .getByRole("button", { name: "Tag all files" })
+      .click({ force: true });
+
+    const download = await saveFromDownloadRow(page);
 
     const suggestedFilename = download.suggestedFilename();
     expect(suggestedFilename).toMatch(/\.jpg$/i);
@@ -115,12 +118,11 @@ test("keeps the PNG format when the option is left disabled", async ({
     await page.locator("#media-file").setInputFiles(pngPath);
     await page.locator("#media-tags").fill("forest, timelapse");
 
-    const [download] = await Promise.all([
-      page.waitForEvent("download"),
-      page
-        .getByRole("button", { name: "Tag all and download" })
-        .click({ force: true }),
-    ]);
+    await page
+      .getByRole("button", { name: "Tag all files" })
+      .click({ force: true });
+
+    const download = await saveFromDownloadRow(page);
 
     expect(download.suggestedFilename()).toMatch(/\.png$/i);
 
@@ -148,12 +150,11 @@ test("flattens transparency when converting a PNG with an alpha channel", async 
     await page.getByLabel("PNG to JPG conversion").getByRole("checkbox").check();
     await page.locator("#media-tags").fill("forest, timelapse");
 
-    const [download] = await Promise.all([
-      page.waitForEvent("download"),
-      page
-        .getByRole("button", { name: "Tag all and download" })
-        .click({ force: true }),
-    ]);
+    await page
+      .getByRole("button", { name: "Tag all files" })
+      .click({ force: true });
+
+    const download = await saveFromDownloadRow(page);
 
     await download.saveAs(downloadPath);
 
@@ -186,12 +187,11 @@ test("converts a per-file PNG in individual mode", async ({ page }) => {
       .getByRole("textbox", { name: "Tags for sample.png" })
       .fill("forest, timelapse");
 
-    const [download] = await Promise.all([
-      page.waitForEvent("download"),
-      page
-        .getByRole("button", { name: "Tag and download sample.png" })
-        .click({ force: true }),
-    ]);
+    await page
+      .getByRole("button", { name: "Tag sample.png" })
+      .click({ force: true });
+
+    const download = await saveFromDownloadRow(page);
 
     expect(download.suggestedFilename()).toMatch(/\.jpg$/i);
 

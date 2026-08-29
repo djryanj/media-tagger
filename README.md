@@ -14,7 +14,7 @@ The core workflow is intentionally narrow:
 2. Choose shared or individual tagging mode.
 3. Enter shared tags or per-file tags, checking the live tag preview under each input.
 4. Render the payload in the exact shape `tags:<csv list of tags>`.
-5. Download each updated file individually in the browser, tracked in the download manager.
+5. Download each updated file individually from the download manager, which tracks what is still outstanding.
 
 ## Supported Formats
 
@@ -33,10 +33,13 @@ Submitting fills the download manager at the bottom of the screen with a row for
 | `Queued` | Waiting for the files ahead of it. |
 | `Converting to MP4...` | FFmpeg is re-encoding a GIF, with live percentage and a progress bar. |
 | `Writing metadata...` | Uploaded, exiftool is writing and verifying the payload. |
-| `Downloaded` | The browser download was triggered; the row turns light green. |
+| `Ready to download` | Tagging finished; the row turns light amber and waits for you to save it. |
+| `Downloaded` | You downloaded the file from its row; the row turns light green. |
 | `Failed` | The row turns light red and the reason is shown in the expanded row. |
 
-Automatic download is attempted as soon as a file finishes. Every row also carries its own download button for devices that delay or block the automatic download. Expanding a row shows the filename the result saves as, the tags the server confirmed for that file, and any failure message.
+Nothing downloads automatically. Earlier versions fired a download as soon as each file finished, but a browser never reports whether a download actually saved — on mobile those prompts routinely stack up or get dismissed out of sight, so the app was claiming saves that had not happened. Every file now waits at `Ready to download` until you tap that row's download button, which is the one save the app can observe. The manager header keeps a running `N of M downloaded` count so a large batch is easy to work through, and a downloaded row's button changes to `Download again`.
+
+Expanding a row shows the filename the result saves as, the tags the server confirmed for that file, and any failure message.
 
 ## Image and Video Previews
 

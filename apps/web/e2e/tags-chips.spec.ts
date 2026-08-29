@@ -6,7 +6,7 @@ test.describe('Tag chips and download UI', () => {
     test('shows confirmed tag chips after upload with blank pipe expansion', async ({ page }) => {
       await page.goto('/');
       const submitButton = page.getByRole('button', {
-        name: 'Tag all and download',
+        name: 'Tag all files',
       });
       // Upload a file
       await page.setInputFiles('input[type="file"]', 'e2e/fixtures/sample.jpg');
@@ -26,7 +26,7 @@ test.describe('Tag chips and download UI', () => {
   test('shows confirmed tag chips after upload with pipe expansion', async ({ page }) => {
     await page.goto('/');
     const submitButton = page.getByRole('button', {
-      name: 'Tag all and download',
+      name: 'Tag all files',
     });
     // Upload a file
     await page.setInputFiles('input[type="file"]', 'e2e/fixtures/sample.jpg');
@@ -46,7 +46,7 @@ test.describe('Tag chips and download UI', () => {
   test('handles long filenames in download UI', async ({ page }) => {
     await page.goto('/');
     const submitButton = page.getByRole('button', {
-      name: 'Tag all and download',
+      name: 'Tag all files',
     });
     // Upload a file with a long name
     const longName = 'averyveryveryveryveryveryverylongfilenamefortestingpurposes.jpg';
