@@ -15,6 +15,7 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ### Changed
 
+- chore(deps): bump dorny/paths-filter from 4.0.2 to 4.0.3 ([#112](https://github.com/djryanj/media-tagger/pull/112))
 - chore(deps): bump docker/setup-buildx-action from 4.2.0 to 4.3.0 ([#113](https://github.com/djryanj/media-tagger/pull/113))
 - The separate "Tags applied by the server" block was removed from the form. Confirmed tags are now shown per file inside its download manager row, and the live tag preview covers the pre-submit case.
 
