@@ -4,7 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project uses semantic version tags for releases.
 
-## [0.6.0] - 2026-08-29
+## [0.6.1] - Unreleased
+
+### Fixed
+
+- A download manager row no longer claims a file was downloaded when it was not. Browsers give no completion signal for an automatic blob download, and on mobile those prompts frequently stack up or are dismissed out of sight, so the green row was reporting saves that never happened. A row that finished processing now stays light amber at `Ready to download` and turns light green only once its own download button is tapped, which is the one save the app can observe. The row's download button leads the row until then, the expanded row says the file is not saved yet, and the manager header shows a running `N of M downloaded` count for working through a large batch. A downloaded row's button offers `Download again`. The status strip reports `Tagged ...` for processing and `Downloaded ...` only for a save the user made.
+
+### Removed
+
+- Automatic downloads. Files are now only saved from the download manager, so nothing is lost behind a browser prompt that stacked up or was dismissed unseen, and nothing is downloaded that the user did not ask for. The submit buttons no longer download either, and are renamed accordingly: `Tag all and download` is now `Tag all files`, and the per-file `Tag and download` is now `Tag file`.
+
+## [0.6.0] - Unreleased
 
 ### Added
 

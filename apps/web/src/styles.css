@@ -431,6 +431,13 @@ h1 {
   font-size: 1.05rem;
 }
 
+.download-manager-summary {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #5a6673;
+}
+
 .download-item-list {
   display: grid;
   gap: 8px;
@@ -455,6 +462,14 @@ h1 {
   transition:
     background-color 160ms ease,
     border-color 160ms ease;
+}
+
+/* Processed but unconfirmed: the automatic download fired and the browser
+   never told us whether it landed, so the row stays amber until the user
+   downloads it themselves. */
+.download-item-ready {
+  border-color: #dcc07a;
+  background: #fdf6e6;
 }
 
 .download-item-downloaded {
@@ -533,6 +548,11 @@ h1 {
   color: #5a6673;
 }
 
+.download-item-ready .download-item-status {
+  color: #8a6516;
+  font-weight: 600;
+}
+
 .download-item-downloaded .download-item-status {
   color: #2f6b34;
   font-weight: 600;
@@ -551,6 +571,14 @@ h1 {
 
 .download-item-download {
   flex-shrink: 0;
+}
+
+/* The button is the only way to confirm a save, so it leads the row while the
+   download is still unconfirmed. */
+.download-item-download-pending {
+  border-color: #3f6c9e;
+  color: #ffffff;
+  background: #3f6c9e;
 }
 
 .download-item-details {

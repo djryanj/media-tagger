@@ -97,10 +97,10 @@ test("the previewed tags match the tags the server writes", async ({ page }) => 
       .allTextContents();
 
     await page
-      .getByRole("button", { name: "Tag all and download" })
+      .getByRole("button", { name: "Tag all files" })
       .click({ force: true });
 
-    await expect(page.locator(".download-item-downloaded")).toHaveCount(1);
+    await expect(page.locator(".download-item-ready")).toHaveCount(1);
 
     await page
       .getByRole("button", { name: "Toggle details for sample-a.png" })

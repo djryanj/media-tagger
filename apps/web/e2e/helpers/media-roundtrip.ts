@@ -17,6 +17,28 @@ export type MediaFixture = {
   ffmpegArgs: string[];
 };
 
+/**
+ * Nothing downloads automatically, so every round trip finishes by saving the
+ * file from its download-manager row.
+ */
+export async function saveFromDownloadRow(
+  page: Page,
+  rowIndex = 0,
+): Promise<Download> {
+  const downloadButton = page.locator(".download-item-download").nth(rowIndex);
+
+  await expect(downloadButton).toBeEnabled();
+
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    downloadButton.evaluate((button) => {
+      (button as HTMLButtonElement).click();
+    }),
+  ]);
+
+  return download;
+}
+
 export async function runMediaRoundTrip(page: Page, fixture: MediaFixture) {
   const temporaryDirectory = await mkdtemp(join(tmpdir(), "media-tagger-e2e-"));
   const sourcePath = join(temporaryDirectory, fixture.filename);
@@ -30,15 +52,16 @@ export async function runMediaRoundTrip(page: Page, fixture: MediaFixture) {
     await page.locator("#media-tags").fill(TEST_TAGS);
 
     const submitButton = page.getByRole("button", {
-      name: "Tag all and download",
+      name: "Tag all files",
     });
     await expect(submitButton).toBeVisible();
     await expect(submitButton).toBeEnabled();
 
-    const [download] = await Promise.all([
-      page.waitForEvent("download"),
-      submitButton.click({ force: true }),
-    ]);
+    await submitButton.click({ force: true });
+
+    await expect(page.locator(".download-item-ready")).toHaveCount(1);
+
+    const download = await saveFromDownloadRow(page);
 
     await download.saveAs(downloadPath);
 
@@ -46,6 +69,7 @@ export async function runMediaRoundTrip(page: Page, fixture: MediaFixture) {
     await expect(
       page.getByText(`Downloaded ${download.suggestedFilename()}.`),
     ).toBeVisible();
+    await expect(page.locator(".download-item-downloaded")).toHaveCount(1);
   } finally {
     await rm(temporaryDirectory, { force: true, recursive: true });
   }
@@ -75,27 +99,29 @@ export async function runMultiFileRoundTrip(
     await page.locator("#media-tags").fill(TEST_TAGS);
 
     const submitButton = page.getByRole("button", {
-      name: "Tag all and download",
+      name: "Tag all files",
     });
     await expect(submitButton).toBeVisible();
     await expect(submitButton).toBeEnabled();
 
-    const downloads: Download[] = [];
-    const handleDownload = (download: Download) => {
-      downloads.push(download);
-    };
-
-    page.on("download", handleDownload);
-
     await submitButton.click({ force: true });
 
-    await expect
-      .poll(() => downloads.length, {
-        message: `Expected ${fixtures.length} download events.`,
-      })
-      .toBe(fixtures.length);
+    await expect(page.getByText("Tagged 2 of 2 files.")).toBeVisible();
 
-    page.off("download", handleDownload);
+    const downloadManager = page.getByLabel("Downloads");
+    const manualDownloadButtons = downloadManager.locator(
+      ".download-item-download",
+    );
+
+    await expect(downloadManager).toBeVisible();
+    await expect(manualDownloadButtons).toHaveCount(2);
+    await expect(downloadManager.locator(".download-item-ready")).toHaveCount(2);
+
+    const downloads: Download[] = [];
+
+    for (let rowIndex = 0; rowIndex < fixtures.length; rowIndex += 1) {
+      downloads.push(await saveFromDownloadRow(page, rowIndex));
+    }
 
     await Promise.all(
       downloads.map(async (download, index) => {
@@ -112,21 +138,13 @@ export async function runMultiFileRoundTrip(
       }),
     );
 
-    await expect(page.getByText("Downloaded 2 of 2 files.")).toBeVisible();
-    const downloadManager = page.getByLabel("Downloads");
-    const manualDownloadButtons = downloadManager.locator(
-      ".download-item-download",
-    );
-
-    await expect(downloadManager).toBeVisible();
-    await expect(manualDownloadButtons).toHaveCount(2);
-    await expect(downloadManager.locator(".download-item-downloaded")).toHaveCount(2);
-    await manualDownloadButtons.first().evaluate((button) => {
-      (button as HTMLButtonElement).click();
-    });
     await expect(
-      page.getByText(`Manual download started for ${downloads[0]?.suggestedFilename()}.`),
+      page.getByText(`Downloaded ${downloads[1]?.suggestedFilename()}.`),
     ).toBeVisible();
+    await expect(
+      downloadManager.locator(".download-item-downloaded"),
+    ).toHaveCount(2);
+    await expect(downloadManager.getByText("2 of 2 downloaded")).toBeVisible();
   } finally {
     await rm(temporaryDirectory, { force: true, recursive: true });
   }
