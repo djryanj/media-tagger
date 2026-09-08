@@ -12,6 +12,7 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ### Changed
 
+- chore(deps-dev): bump @testing-library/jest-dom from 6.9.1 to 7.0.1 ([#124](https://github.com/djryanj/media-tagger/pull/124))
 - Loading a new batch of files now clears the previous form contents instead of carrying them over. The shared tags textarea and per-file tag fields no longer keep stale tags from the last selection, the tagging mode returns to shared, conversion toggles go back to their defaults, and the download manager is emptied, so a fresh selection always starts clean. [#125](https://github.com/djryanj/media-tagger/issues/125)
 
 ## [0.6.1] - 2026-08-29
