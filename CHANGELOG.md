@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project uses semantic version tags for releases.
 
+## [0.6.2] - Unreleased
+
+### Added
+
+- A `Clear form` button beside `Tag all files` resets the whole form to its initial empty state: it drops the selected files, empties the shared and per-file tag inputs, returns to shared tagging mode, restores the default conversion options (GIF-to-MP4 on, PNG-to-JPG off), and clears the download manager, warnings, and errors. [#125](https://github.com/djryanj/media-tagger/issues/125)
+
+### Changed
+
+- Loading a new batch of files now clears the previous form contents instead of carrying them over. The shared tags textarea and per-file tag fields no longer keep stale tags from the last selection, the tagging mode returns to shared, conversion toggles go back to their defaults, and the download manager is emptied, so a fresh selection always starts clean. [#125](https://github.com/djryanj/media-tagger/issues/125)
+
 ## [0.6.1] - 2026-08-29
 
 ### Fixed
