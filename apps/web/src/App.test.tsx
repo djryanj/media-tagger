@@ -2638,4 +2638,114 @@ describe("App", () => {
       ).toBeNull();
     });
   });
+
+  describe("clearing the form", () => {
+    it("wipes the shared tags textarea when new images are loaded", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      fetchMock.mockResolvedValue(buildConfigResponse());
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      const fileInput = screen.getByLabelText(/file/i, {
+        selector: 'input[type="file"]',
+      });
+
+      await user.upload(
+        fileInput,
+        new File(["png-data-1"], "first.png", { type: "image/png" }),
+      );
+      await user.type(
+        screen.getByRole("textbox", { name: /tags/i }),
+        "forest, timelapse",
+      );
+      expect(screen.getByRole("textbox", { name: /tags/i })).toHaveValue(
+        "forest, timelapse",
+      );
+
+      await user.upload(
+        fileInput,
+        new File(["png-data-2"], "second.png", { type: "image/png" }),
+      );
+
+      expect(screen.getByRole("textbox", { name: /tags/i })).toHaveValue("");
+      expect(screen.getByText("Selected second.png.")).toBeVisible();
+    });
+
+    it("returns to shared mode and drops per-file tags when new images are loaded", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      fetchMock.mockResolvedValue(buildConfigResponse());
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      const fileInput = screen.getByLabelText(/file/i, {
+        selector: 'input[type="file"]',
+      });
+
+      await user.upload(
+        fileInput,
+        new File(["png-data-1"], "first.png", { type: "image/png" }),
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Tag images individually" }),
+      );
+      await user.type(
+        screen.getByRole("textbox", { name: "Tags for first.png" }),
+        "forest",
+      );
+
+      await user.upload(
+        fileInput,
+        new File(["png-data-2"], "second.png", { type: "image/png" }),
+      );
+
+      expect(
+        screen.getByRole("button", { name: "Tag all images the same" }),
+      ).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByRole("textbox", { name: /tags/i })).toHaveValue("");
+      expect(
+        screen.queryByRole("textbox", { name: "Tags for second.png" }),
+      ).toBeNull();
+    });
+
+    it("clears files, tags, and downloads when the Clear button is pressed", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.mocked(fetch);
+      fetchMock.mockResolvedValueOnce(buildConfigResponse());
+      fetchMock.mockResolvedValueOnce(
+        new Response(new Blob(["tagged-media"]), {
+          status: 200,
+          headers: {
+            "content-disposition": 'attachment; filename="tagged-sample.png"',
+            "content-type": "image/png",
+          },
+        }),
+      );
+
+      render(<App />);
+      await screen.findByText("The server accepts files up to 1 GB.");
+
+      await user.upload(
+        screen.getByLabelText(/file/i, { selector: 'input[type="file"]' }),
+        new File(["png-data"], "sample.png", { type: "image/png" }),
+      );
+      await user.type(screen.getByRole("textbox", { name: /tags/i }), "forest");
+      await user.click(screen.getByRole("button", { name: "Tag all files" }));
+
+      await screen.findByText("Downloads");
+
+      await user.click(screen.getByRole("button", { name: "Clear form" }));
+
+      expect(screen.queryByText("Downloads")).toBeNull();
+      expect(
+        screen.queryByRole("img", { name: "Preview of sample.png" }),
+      ).toBeNull();
+      expect(screen.getByRole("textbox", { name: /tags/i })).toHaveValue("");
+      expect(screen.getByText("No files selected")).toBeVisible();
+      expect(screen.getByText("Cleared the form.")).toBeVisible();
+    });
+  });
 });

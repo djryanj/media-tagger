@@ -797,31 +797,49 @@ export default function App() {
     }
   }
 
+  /**
+   * Returns every form field to its initial state. Loading a new batch of files
+   * and the Clear button both call this so a fresh selection never inherits tags,
+   * a tagging mode, conversion choices, or download rows from the previous one.
+   */
+  function resetFormState() {
+    setSelectedFiles([]);
+    setTagMode("shared");
+    setTags("");
+    setPerFileTags({});
+    setCopiedTags(null);
+    setCopiedFromFilename(null);
+    setErrorMessage(null);
+    setWarningMessages([]);
+    setDownloadItems([]);
+    setExpandedDownloadIds(new Set());
+    setLightboxTarget(null);
+    setConvertGifsToMp4(true);
+    setConvertPngsToJpg(false);
+    setPerFileConvertGif({});
+    setPerFileConvertPng({});
+    setDetectedGifIds(new Set());
+    setDetectedPngIds(new Set());
+  }
+
+  function handleClearForm() {
+    resetFormState();
+    setStatus("Cleared the form.");
+  }
+
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
 
     if (files.length > MAX_FILES) {
       event.target.value = "";
-      setSelectedFiles([]);
-      setPerFileTags({});
-      setCopiedTags(null);
-      setCopiedFromFilename(null);
-      setDownloadItems([]);
+      resetFormState();
       setErrorMessage(`Choose no more than ${MAX_FILES} files at once.`);
       setStatus("Ready for upload.");
       return;
     }
 
+    resetFormState();
     setSelectedFiles(files);
-    setPerFileTags((previousTags) =>
-      buildPerFileTagMap(files, previousTags, tags),
-    );
-    setPerFileConvertGif({});
-    setPerFileConvertPng({});
-    setCopiedTags(null);
-    setCopiedFromFilename(null);
-    setDownloadItems([]);
-    setExpandedDownloadIds(new Set());
 
     if (files.length > 0) {
       setStatus(
@@ -829,7 +847,6 @@ export default function App() {
           ? `Selected ${files[0]?.name ?? "file"}.`
           : `Selected ${files.length} files.`,
       );
-      setErrorMessage(null);
       return;
     }
 
@@ -1158,13 +1175,23 @@ export default function App() {
             </p>
           </section>
 
-          <button
-            className="submit-button"
-            disabled={isSubmitting}
-            type="submit"
-          >
-            {isSubmitting ? "Writing metadata..." : "Tag all files"}
-          </button>
+          <div className="form-actions">
+            <button
+              className="submit-button"
+              disabled={isSubmitting}
+              type="submit"
+            >
+              {isSubmitting ? "Writing metadata..." : "Tag all files"}
+            </button>
+            <button
+              className="secondary-button"
+              disabled={isSubmitting}
+              onClick={handleClearForm}
+              type="button"
+            >
+              Clear form
+            </button>
+          </div>
         </form>
 
         {downloadItems.length > 0 ? (

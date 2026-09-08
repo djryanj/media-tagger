@@ -378,6 +378,22 @@ h1 {
   white-space: nowrap;
 }
 
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.form-actions .submit-button {
+  flex: 1 1 auto;
+  width: auto;
+}
+
+.form-actions .secondary-button {
+  flex: 0 0 auto;
+}
+
 .submit-button {
   position: relative;
   z-index: 1;
