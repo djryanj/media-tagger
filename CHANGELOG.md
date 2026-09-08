@@ -12,6 +12,7 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ### Changed
 
+- chore(deps): bump react and @types/react ([#122](https://github.com/djryanj/media-tagger/pull/122))
 - chore(deps-dev): bump eslint-plugin-react-refresh from 0.5.3 to 0.5.6 ([#123](https://github.com/djryanj/media-tagger/pull/123))
 - chore(deps-dev): bump @testing-library/jest-dom from 6.9.1 to 7.0.1 ([#124](https://github.com/djryanj/media-tagger/pull/124))
 - chore(deps): bump react and react-dom from 19.2.7 to 19.2.8. Dependabot bumped `react` on its own, which left `react-dom` a patch behind; React 19 requires the two packages to match exactly, so the web test suite failed to start. Both are now pinned to `^19.2.8`.
