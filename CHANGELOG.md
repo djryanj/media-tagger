@@ -12,6 +12,7 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ### Changed
 
+- chore(deps): bump renovatebot/github-action from 46.2.4 to 46.2.5 ([#121](https://github.com/djryanj/media-tagger/pull/121))
 - chore(deps): bump react and @types/react ([#122](https://github.com/djryanj/media-tagger/pull/122))
 - chore(deps-dev): bump eslint-plugin-react-refresh from 0.5.3 to 0.5.6 ([#123](https://github.com/djryanj/media-tagger/pull/123))
 - chore(deps-dev): bump @testing-library/jest-dom from 6.9.1 to 7.0.1 ([#124](https://github.com/djryanj/media-tagger/pull/124))
