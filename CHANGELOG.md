@@ -12,6 +12,7 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ### Changed
 
+- chore(deps-dev): bump @types/node from 25.6.0 to 26.4.1 ([#131](https://github.com/djryanj/media-tagger/pull/131))
 - chore(deps-dev): bump vitest from 4.1.5 to 5.0.0 ([#120](https://github.com/djryanj/media-tagger/pull/120))
 - chore(deps): bump renovatebot/github-action from 46.2.4 to 46.2.5 ([#121](https://github.com/djryanj/media-tagger/pull/121))
 - chore(deps): bump react and @types/react ([#122](https://github.com/djryanj/media-tagger/pull/122))
