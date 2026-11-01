@@ -12,6 +12,7 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ### Changed
 
+- chore(deps): bump actions/setup-node from 7.0.0 to 7.1.0 ([#136](https://github.com/djryanj/media-tagger/pull/136))
 - chore(deps-dev): bump @types/node from 25.6.0 to 26.6.6 ([#131](https://github.com/djryanj/media-tagger/pull/131))
 - chore(deps): bump fastify from 5.10.0 to 5.12.3 ([#133](https://github.com/djryanj/media-tagger/pull/133))
 - chore(deps-dev): bump vitest from 4.1.5 to 5.0.0 ([#120](https://github.com/djryanj/media-tagger/pull/120))
