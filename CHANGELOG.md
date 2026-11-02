@@ -12,6 +12,7 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ### Changed
 
+- chore(deps): bump docker/build-push-action from 7.3.0 to 7.4.0 ([#134](https://github.com/djryanj/media-tagger/pull/134))
 - chore(deps): bump docker/setup-buildx-action from 4.3.0 to 4.4.1 ([#135](https://github.com/djryanj/media-tagger/pull/135))
 - chore(deps): bump actions/setup-node from 7.0.0 to 7.1.0 ([#136](https://github.com/djryanj/media-tagger/pull/136))
 - chore(deps-dev): bump @types/node from 25.6.0 to 26.6.6 ([#131](https://github.com/djryanj/media-tagger/pull/131))
