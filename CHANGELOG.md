@@ -12,6 +12,7 @@ The format is based on Keep a Changelog, and this project uses semantic version 
 
 ### Changed
 
+- chore(deps-dev): bump vite from 8.2.2 to 8.3.5 ([#140](https://github.com/djryanj/media-tagger/pull/140))
 - chore(deps-dev): bump globals from 17.7.0 to 17.13.0 ([#132](https://github.com/djryanj/media-tagger/pull/132))
 - chore(deps): bump docker/build-push-action from 7.3.0 to 7.4.0 ([#134](https://github.com/djryanj/media-tagger/pull/134))
 - chore(deps): bump docker/setup-buildx-action from 4.3.0 to 4.4.1 ([#135](https://github.com/djryanj/media-tagger/pull/135))
